@@ -1,0 +1,71 @@
+                       ZPack
+                File Specifications
+                v0.2.0 (17/08/2020)
+  Copyright (c) 2020 LeadRDRK. All rights reserved.
+  Everyone is permitted to copy and distribute this
+  document in any form. External modifications are
+  welcome but must not be misrepresented as the 
+  original document.
+-----------------------------------------------------
+
+Changelog
+----------
+  v0.2.0   Added a uncompressed size field in the file 
+           record.
+  v0.1.0   Added a file offset field in the file record.
+  
+Synopsis
+---------
+  ZPack is a simple, general-purpose archive file
+  format with lossless data compression. It is based 
+  on the ZIP/ZIP64 format by PKWARE.
+  
+  It exclusively uses the Zstandard compression algorithm
+  for file compression (hence the name). The default
+  compression level is 19.
+
+  The file extension for ZPack-formatted files is .zpk
+  
+General format of a ZPack file
+-------------------------------
+  [ZPack header]
+  [File data 1]
+  [File data 2]
+  ...
+  [File data n]
+  [Central directory record]
+  [End of central directory record]
+  
+  All values must be stored in little-endian byte order
+  unless specifically noted.
+
+ZPack header
+-------------
+  magic number               4 bytes (0x5a504b15)
+  minimum version required   2 bytes
+
+Central directory record
+-------------------------
+  A central directory record is a collection of
+  multiple file records and follows the following
+  format:
+  
+  signature                  4 bytes (0x5a504b14)
+  [file record 1]
+  [file record 2]
+  ...
+  [file record n]
+  
+File record
+------------
+  filename length (n)        4 bytes
+  filename                   n bytes
+  file offset                8 bytes
+  compressed size            8 bytes
+  uncompressed size          8 bytes
+  crc-32                     4 bytes
+
+End of central directory record
+--------------------------------
+  signature                  4 bytes (0x5a504b13)
+  central dir record offset  8 bytes
