@@ -179,7 +179,6 @@ void Writer::WriteCDR()
     cdrOffset = file.tellp();
     WriteLE32(file, CDIR_SIG);
     for (FileInfo *info: entryList) {
-        // filename
         WriteLE32(file, info->filename.length());
         file << info->filename;
         WriteLE64(file, info->fileOffset);
