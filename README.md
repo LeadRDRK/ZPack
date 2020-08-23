@@ -13,7 +13,7 @@ As of now, there are no official documentation of the API yet, but you can alway
 # Development
 You are welcome to make any contributions in this project. Code that you wrote must be portable and compatible with C++11.
 ## Building
-You can build both the library and the CLI using the CMake file in the parent directory.
+You can build both the library and the CLI using the CMake file in the root directory.
 
 To include the library in your own project, add the /lib directory as a subdirectory in your own CMake file.
 # License
