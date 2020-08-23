@@ -5,13 +5,9 @@
     Check the LICENSE file for more information.
 */
 
-// TODO: add UnpackFile with std::ofstream
-// maybe use UnpackFile ostream as the default impl and the dst impl derives from it
-
 #include "zpack.h"
 #include "utils.h"
 #include <algorithm>
-#include <iostream>
 #include <ostream>
 #include <sstream>
 #include <zstd.h>

@@ -7,7 +7,6 @@
 
 #include "zpack.h"
 #include "utils.h"
-#include <iostream>
 #include <ostream>
 #include <zstd.h>
 using namespace ZPack;
