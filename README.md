@@ -5,7 +5,7 @@ Designed to be extremely fast, it exclusively uses the Zstandard compression alg
 
 More about Zstandard/zstd at https://facebook.github.io/zstd
 # Status
-ZPack is still a relatively new format. Its implementation is also only recently developed, therefore the API is not perfect yet but it's already fully functional and can be used in your own projects.
+ZPack is still a relatively new format. Its implementation is also only recently developed, therefore the API is not perfect yet but it's already fully functional and can be used in your own projects. However, it should not be considered as stable and API changes can be made at any time. Be mindful when upgrading to a newer version.
 # Documentation
 The specifications for the ZPack file format can be found [here](docs/specs.txt)
 
