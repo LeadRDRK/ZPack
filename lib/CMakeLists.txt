@@ -9,8 +9,8 @@ add_library(zpack SHARED
     crc.c
 
     zpack.h
-    utils.h
-    crc.h
+    zpack_utils.h
+    zpack_crc.h
 )
 set_property(TARGET zpack PROPERTY CXX_STANDARD 11)
 target_link_libraries(zpack zstd)

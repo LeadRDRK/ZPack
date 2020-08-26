@@ -6,7 +6,7 @@
 */
 
 #include "zpack.h"
-#include "utils.h"
+#include "zpack_utils.h"
 #include <algorithm>
 #include <ostream>
 #include <sstream>
