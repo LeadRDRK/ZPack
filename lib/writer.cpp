@@ -6,8 +6,8 @@
 */
 
 #include "zpack.h"
-#include "utils.h"
-#include "crc.h"
+#include "zpack_utils.h"
+#include "zpack_crc.h"
 #include <zstd.h>
 using namespace ZPack;
 using namespace Detail;
