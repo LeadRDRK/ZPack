@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "zpack_common.h"
 #include <fstream>
 #include <string>
 #include <vector>
@@ -61,36 +62,36 @@ namespace ZPack
         ~Reader();
 
         // io operations
-        void OpenFile(std::string filename);
+        void ZPACK_API OpenFile(std::string filename);
         
         // low level reading operations
-        bool ReadHeader(uint16_t &reqVersion);
-        bool ReadEOCDR(uint64_t &cdrOffset);
-        bool ReadCDR(uint64_t cdrOffset, EntryList &entryList, EntryMap &entryMap);
+        bool ZPACK_API ReadHeader(uint16_t &reqVersion);
+        bool ZPACK_API ReadEOCDR(uint64_t &cdrOffset);
+        bool ZPACK_API ReadCDR(uint64_t cdrOffset, EntryList &entryList, EntryMap &entryMap);
         // unpacking operations
-        void UnpackFile(FileInfo *info, std::ostream &dst);
-        void UnpackFile(FileInfo *info, char *dst, size_t dstCapacity);
-        void UnpackFile(std::string filename, std::ostream &dst);
-        void UnpackFile(std::string filename, char *dst, size_t dstCapacity);
-        void UnpackFiles(EntryList &fileList, BufferList &bufferList);
-        void UnpackFiles(EntryList &fileList, OStreamList &streamList);
-        void UnpackFiles(FileNameList &fileList, BufferList &bufferList);
-        void UnpackFiles(FileNameList &fileList, OStreamList &streamList);
+        void ZPACK_API UnpackFile(FileInfo *info, std::ostream &dst);
+        void ZPACK_API UnpackFile(FileInfo *info, char *dst, size_t dstCapacity);
+        void ZPACK_API UnpackFile(std::string filename, std::ostream &dst);
+        void ZPACK_API UnpackFile(std::string filename, char *dst, size_t dstCapacity);
+        void ZPACK_API UnpackFiles(EntryList &fileList, BufferList &bufferList);
+        void ZPACK_API UnpackFiles(EntryList &fileList, OStreamList &streamList);
+        void ZPACK_API UnpackFiles(FileNameList &fileList, BufferList &bufferList);
+        void ZPACK_API UnpackFiles(FileNameList &fileList, OStreamList &streamList);
 
         // getters
-        uint64_t GetFileUncompSize(FileInfo *info);
-        uint64_t GetFileUncompSize(std::string filename);
-        uint64_t GetFileCompSize(FileInfo *info);
-        uint64_t GetFileCompSize(std::string filename);
+        uint64_t ZPACK_API GetFileUncompSize(FileInfo *info);
+        uint64_t ZPACK_API GetFileUncompSize(std::string filename);
+        uint64_t ZPACK_API GetFileCompSize(FileInfo *info);
+        uint64_t ZPACK_API GetFileCompSize(std::string filename);
 
-        uint64_t GetUncompSize();
-        uint64_t GetCompSize();
-        std::ifstream& GetFileStream();
-        EntryList GetEntryList();
-        EntryMap GetEntryMap();
-        FileInfo* GetFileInfo(std::string filename);
-        bool Contains(std::string filename);
-        bool Bad();
+        uint64_t ZPACK_API GetUncompSize();
+        uint64_t ZPACK_API GetCompSize();
+        std::ifstream& ZPACK_API GetFileStream();
+        EntryList ZPACK_API GetEntryList();
+        EntryMap ZPACK_API GetEntryMap();
+        FileInfo* ZPACK_API GetFileInfo(std::string filename);
+        bool ZPACK_API Contains(std::string filename);
+        bool ZPACK_API Bad();
 
     private:
         // file reader (calls all of the low level reading functions)
@@ -127,26 +128,26 @@ namespace ZPack
         ~Writer();
 
         // io operations
-        void OpenFile(std::string filename);
+        void ZPACK_API OpenFile(std::string filename);
 
         // low level writing operations
-        void WriteHeader();
-        void WriteFile(std::string filename, std::istream* inputFile, int compressionLevel = 19);
-        void WriteFile(std::string filename, std::string inputFile, int compressionLevel = 19);
-        void WriteFiles(IStreamList &fileList, int compressionLevel = 19);
-        void WriteFiles(FileList &fileList, int compressionLevel = 19);
-        void WriteCDR();
-        void WriteEOCDR();
+        void ZPACK_API WriteHeader();
+        void ZPACK_API WriteFile(std::string filename, std::istream* inputFile, int compressionLevel = 19);
+        void ZPACK_API WriteFile(std::string filename, std::string inputFile, int compressionLevel = 19);
+        void ZPACK_API WriteFiles(IStreamList &fileList, int compressionLevel = 19);
+        void ZPACK_API WriteFiles(FileList &fileList, int compressionLevel = 19);
+        void ZPACK_API WriteCDR();
+        void ZPACK_API WriteEOCDR();
         // packing operations
-        void PackFiles(IStreamList &fileList, int compressionLevel = 19);
-        void PackFiles(FileList &fileList, int compressionLevel = 19);
+        void ZPACK_API PackFiles(IStreamList &fileList, int compressionLevel = 19);
+        void ZPACK_API PackFiles(FileList &fileList, int compressionLevel = 19);
 
         // getters
-        bool Bad();
-        uint64_t GetUncompSize();
-        uint64_t GetCompSize();
-        std::ofstream& GetFileStream();
-        EntryList GetEntryList();
+        bool ZPACK_API Bad();
+        uint64_t ZPACK_API GetUncompSize();
+        uint64_t ZPACK_API GetCompSize();
+        std::ofstream& ZPACK_API GetFileStream();
+        EntryList ZPACK_API GetEntryList();
 
     private:
         // properties
