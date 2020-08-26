@@ -1,7 +1,7 @@
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 find_package(ZSTD REQUIRED)
 
-add_library(zpack SHARED
+add_library(zpack
     reader.cpp
     unpacker.cpp
     writer.cpp
