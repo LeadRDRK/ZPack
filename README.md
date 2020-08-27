@@ -9,7 +9,7 @@ ZPack is still a relatively new format. Its implementation is also only recently
 # Documentation
 The specifications for the ZPack file format can be found [here](docs/specs.txt)
 
-As of now, there are no official documentation of the API yet, but you can always go header spelunking.
+The API documentation can be generated using the Doxyfile in docs/Doxyfile. An online copy of it can be found [here](https://leadrdrk.eu.org/zpack)
 # Development
 You are welcome to make any contributions in this project. Code that you wrote must be portable and compatible with C++11.
 ## Building
