@@ -203,9 +203,7 @@ bool Reader::Contains(std::string filename)
 }
 
 // one liners
-uint64_t Reader::GetFileUncompSize(FileInfo *info) { return info->uncompSize; }
 uint64_t Reader::GetFileUncompSize(std::string filename) { return GetFileInfo(filename)->uncompSize; }
-uint64_t Reader::GetFileCompSize(FileInfo *info) { return info->compSize; }
 uint64_t Reader::GetFileCompSize(std::string filename) { return GetFileInfo(filename)->compSize; }
 
 uint64_t Reader::GetUncompSize()  { return uncompSize; }
