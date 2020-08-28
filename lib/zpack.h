@@ -181,7 +181,7 @@ namespace ZPack
         FileInfo* GetFileInfo(std::string filename); /**< Get a file's information. */
         bool Contains(std::string filename); /**< Check if the archive contains a file. */
         bool Bad(); /**< Check if the reader is "bad".\n
-        This is true when the file is unreadable or invalid. */
+        This is true when the archive is unreadable, invalid or when an unpacked file is invalid */
 
     private:
         // file reader (calls all of the low level reading functions)
@@ -237,6 +237,7 @@ namespace ZPack
 
         /**
          * Compress and write the file into the archive. Also adds the file into the entry list.
+         * Note that this does not write the complete archive; only the data of the file(s).
          * @see Writer#PackFiles
          * @param filename Name of the file (in the CDR entry).
          * @param inputFile The istream of the file.
@@ -246,6 +247,7 @@ namespace ZPack
 
         /**
          * Compress and write the file into the archive. Also adds the file into the entry list.
+         * Note that this does not write the complete archive; only the data of the file(s).
          * @see Writer#PackFiles
          * @param filename Name of the file (in the CDR entry).
          * @param inputFile Path to the file.
@@ -255,6 +257,7 @@ namespace ZPack
 
         /**
          * Compress and write multiple files into the archive. Also adds them into the entry list.
+         * Note that this does not write the complete archive; only the data of the file(s).
          * @see Writer#PackFiles
          * @param fileList A list of filename-istream pairs.
          * @param compressionLevel The compression level to use for the files. Default: 19.
@@ -263,6 +266,7 @@ namespace ZPack
 
         /**
          * Compress and write multiple files into the archive. Also adds them into the entry list.
+         * Note that this does not write the complete archive; only the data of the file(s).
          * @see Writer#PackFiles
          * @param fileList A list of filename-file path pairs.
          * @param compressionLevel The compression level to use for the files. Default: 19.
@@ -297,7 +301,7 @@ namespace ZPack
 
         // getters
         bool Bad(); /**< Check if the reader is "bad".\n
-        This is true when the file is unreadable or invalid. */
+        This is true when the archive is unwritable. */
         uint64_t GetUncompSize(); /**< Get the total uncompressed size of the archive's files. */
         uint64_t GetCompSize(); /**< Get the total compressed size of the archive's files. */
         std::ofstream& GetFileStream(); /**< Get the underlying output file stream. */
