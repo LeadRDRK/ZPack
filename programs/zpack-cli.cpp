@@ -183,6 +183,11 @@ int createArchive(PathList &pathList, std::string &filename, int compressionLeve
     FileList fileList;
     parsePathList(pathList, fileList);
 
+    if (getFileExt(filename).empty())
+    {
+        // automatically add extension
+        filename += ".zpk";
+    }
     ZPack::Writer zpkWriter(filename);
     if (zpkWriter.Bad())
     {
