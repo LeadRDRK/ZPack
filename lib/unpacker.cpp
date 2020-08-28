@@ -7,6 +7,7 @@
 
 #include "zpack.h"
 #include "zpack_utils.h"
+#include "zpack_crc.h"
 #include <algorithm>
 #include <ostream>
 #include <sstream>
@@ -28,6 +29,7 @@ void Reader::UnpackFile(FileInfo *info, std::ostream &dst)
     size_t toRead = std::min(info->compSize, ZSTD_DStreamInSize());
     size_t lastRet = 0;
     size_t totalRead = 0;
+    CRC32 crc;
 
     // file reading loop
     while (totalRead < info->compSize)
@@ -62,6 +64,9 @@ void Reader::UnpackFile(FileInfo *info, std::ostream &dst)
                 bad = true;
                 return;
             }
+            // calculate crc
+            crc.Add(charOutBuf, outBuf->pos);
+            // write to dst
             dst.write(charOutBuf, outBuf->pos);
             lastRet = ret;
         }
@@ -73,6 +78,13 @@ void Reader::UnpackFile(FileInfo *info, std::ostream &dst)
          * frame, but we reached the end of the file! We assume this is an
          * error, and the input was truncated.
          */
+        bad = true;
+        return;
+    }
+
+    // verify crc
+    if (info->crc != crc)
+    {
         bad = true;
         return;
     }
