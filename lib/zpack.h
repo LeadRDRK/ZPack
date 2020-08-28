@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#define ZPACK_VERSION "0.2.1"
-#define ZPACK_VERSION_INT 021
+#define ZPACK_VERSION "0.2.2"
+#define ZPACK_VERSION_INT 022
 
 // version required to read the file; not necessarily the current version
 // should be increased when a file structure change is made
