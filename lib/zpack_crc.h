@@ -1,16 +1,16 @@
 #pragma once
-#ifdef __cplusplus
-extern "C"
+#include <cstdlib>
+#include <cstdint>
+
+class CRC32
 {
-#endif
+    public:
+        CRC32();
+        void Add(char* buf, size_t size);
+        uint32_t Get();
+        operator uint32_t() { return Get(); };
 
-#include <stdint.h>
-#include <stddef.h>
-
-void crc32_init(uint32_t *crc);
-void crc32_add(const void *buf, size_t size, uint32_t *crc);
-void crc32_finalize(uint32_t *crc);
-
-#ifdef __cplusplus
-}
-#endif
+    private:
+        uint32_t crc;
+        
+};

@@ -92,7 +92,7 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
 
     // file processing section
     fileInfo->fileOffset = file.tellp();
-    crc32_init(&fileInfo->crc);
+    CRC32 crc;
     int compressedSize = 0;
 
     char* charInBuf = (char*)inBuf->src;
@@ -112,7 +112,7 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
         inBuf->size = readSize;
 
         // calculate crc
-        crc32_add(charInBuf, readSize, &fileInfo->crc);
+        crc.Add(charInBuf, readSize);
 
         // compress the file
         ZSTD_EndDirective mode = inputFile->eof() ? ZSTD_e_end : ZSTD_e_continue;
@@ -140,7 +140,7 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
         }
     }
     
-    crc32_finalize(&fileInfo->crc);
+    fileInfo->crc = crc;
     fileInfo->compSize = compressedSize;
     compSize += compressedSize;
 
