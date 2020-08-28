@@ -1,9 +1,5 @@
-/*
-    simple crc32 implementation in c
-    public domain
-*/
-
 #include "zpack_crc.h"
+
 const uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
 	0xe963a535, 0x9e6495a3,	0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
@@ -50,20 +46,19 @@ const uint32_t crc32_tab[] = {
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-void crc32_init(uint32_t *crc)
-{
-	*crc = ~0U;
-}
+CRC32::CRC32()
+: crc(~0U)
+{}
 
-void crc32_add(const void *buf, size_t size, uint32_t *crc)
+void CRC32::Add(char *buf, size_t size)
 {
-	const uint8_t *p = (const uint8_t *)buf;
+    const uint8_t *p = (const uint8_t *)buf;
 
 	while (size--)
-		*crc = crc32_tab[(*crc ^ *p++) & 0xFF] ^ (*crc >> 8);
+		crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
 }
 
-void crc32_finalize(uint32_t *crc)
+uint32_t CRC32::Get()
 {
-	*crc ^= ~0U;
+    return crc ^ ~0U;
 }
