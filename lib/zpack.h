@@ -162,12 +162,14 @@ namespace ZPack
 
         /**
          * Get the file's uncompressed size. Shorthand for GetFileInfo(filename)->uncompSize.
+         * Returns 0 if the file does not exist.
          * @param filename Name of the file.
          */
         uint64_t GetFileUncompSize(std::string filename);
 
         /**
          * Get the file's compressed size. Shorthand for GetFileInfo(filename)->compSize.
+         * Returns 0 if the file does not exist.
          * @param filename Name of the file.
          */
         uint64_t GetFileCompSize(std::string filename);

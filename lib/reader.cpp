@@ -202,9 +202,19 @@ bool Reader::Contains(std::string filename)
     return entryMap.count(filename) == 1;
 }
 
+uint64_t Reader::GetFileUncompSize(std::string filename)
+{
+    FileInfo* fileInfo = GetFileInfo(filename);
+    return fileInfo != nullptr ? fileInfo->uncompSize : 0;
+}
+
+uint64_t Reader::GetFileCompSize(std::string filename)
+{
+    FileInfo* fileInfo = GetFileInfo(filename);
+    return fileInfo != nullptr ? fileInfo->compSize : 0;
+}
+
 // one liners
-uint64_t Reader::GetFileUncompSize(std::string filename) { return GetFileInfo(filename)->uncompSize; }
-uint64_t Reader::GetFileCompSize(std::string filename) { return GetFileInfo(filename)->compSize; }
 
 uint64_t Reader::GetUncompSize()  { return uncompSize; }
 uint64_t Reader::GetCompSize()    { return compSize; }
