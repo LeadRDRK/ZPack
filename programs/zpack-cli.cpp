@@ -5,9 +5,11 @@
     Check the LICENSE file for more information.
 */
 
+#include <bits/stdint-uintn.h>
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <chrono>
 #include <vector>
 #include <zpack.h>
@@ -32,9 +34,11 @@ void printUsage()
         "\n"
         "Available options:\n"
         "  -1 ... -22   : compression level\n"
+        "  --fast=#     : negative compression level\n"
         "  -c, --create : create a new archive\n"
         "  -u, --unpack : unpack an archive\n"
         "  -o, --output : specify the output folder\n"
+        "  -l, --list   : list files in an archive\n"
         "  -h, --help   : prints the usage and exit\n"
         "  -v, --version: prints the version and exit\n"
         "\n"
@@ -269,6 +273,60 @@ int unpackArchive(std::string &filename, std::string &outputFolder)
     return 0;
 }
 
+int getNumDigits(int n)
+{
+    int numDigits = 0;
+
+    do {
+        ++numDigits; 
+        n /= 10;
+    } while (n);
+
+    return numDigits;
+}
+
+void printArchiveEntry(uint64_t uncompSize, uint64_t compSize, const std::string &filename)
+{
+    std::string ucsSpace(13 - getNumDigits(uncompSize), ' ');
+    std::string csSpace(13 - getNumDigits(compSize), ' ');
+
+    std::cout <<
+        uncompSize << ucsSpace <<
+        compSize << csSpace <<
+        filename <<
+    std::endl;
+}
+
+int listArchive(std::string &filename)
+{
+
+    ZPack::Reader zpkReader(filename);
+    if (zpkReader.Bad())
+    {
+        std::cerr << "FATAL: File unreadable or invalid." << "\n";
+        return 1;
+    }
+
+    std::cout << "Size         Compressed   Name\n" <<
+                 "-----------  -----------  -------------------" <<
+    std::endl;
+
+    ZPack::EntryList entryList = zpkReader.GetEntryList();
+    for (auto fileInfo: entryList)
+    {
+        printArchiveEntry(fileInfo->uncompSize,
+                          fileInfo->compSize,
+                          fileInfo->filename);
+    }
+
+    std::cout << "-----------  -----------  -------------------" << std::endl;
+    printArchiveEntry(zpkReader.GetUncompSize(),
+                      zpkReader.GetCompSize(),
+                      std::to_string(entryList.size()) + " file(s)");
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     int mode = 0;
@@ -304,6 +362,11 @@ int main(int argc, char **argv)
                 outputFolder = argv[++i];
                 continue;
             }
+            else if (arg == "-l" || arg == "--list")
+            {
+                mode = 3;
+                continue;
+            }
             else if (arg == "-h" || arg == "--help")
             {
                 printUsage();
@@ -316,13 +379,30 @@ int main(int argc, char **argv)
                     "Copyright (c) 2020 LeadRDRK. Licensed under the BSD 3-Clause license.\n";
                 return 0;
             }
+            else if (arg.rfind("--fast=", 0) == 0)
+            {
+                int temp;
+                try {
+                    temp = std::stoi(arg.substr(7));
+                    if (temp >= 1 && temp <= 22)
+                    {
+                        compressionLevel = -temp;
+                    }
+                    else {
+                        std::cout << "Invalid argument: " << arg << "\n";
+                        printUsage();
+                        return 1;
+                    }
+                }
+                catch (int _) {}
+            }
             else if (std::isdigit(arg[1])) {
                 int temp;
                 try {
-                    temp = std::stoi(arg);
-                    if (temp <= -1 && temp >= -22)
+                    temp = -std::stoi(arg);
+                    if (temp >= 1 && temp <= 22)
                     {
-                        compressionLevel = -temp;
+                        compressionLevel = temp;
                     }
                     else {
                         std::cout << "Invalid argument: " << arg << "\n";
@@ -349,13 +429,19 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (mode == 1) // create mode
+    switch (mode)
     {
-        return createArchive(pathList, filename, compressionLevel);
-    }
-    else if (mode == 2) // unpack mode
-    {
-        return unpackArchive(filename, outputFolder);
+        case 1: // create mode
+            return createArchive(pathList, filename, compressionLevel);
+            break;
+
+        case 2: // unpack mode
+            return unpackArchive(filename, outputFolder);
+            break;
+        
+        case 3: // list mode
+            return listArchive(filename);
+            break;
     }
     return 0;
 }
