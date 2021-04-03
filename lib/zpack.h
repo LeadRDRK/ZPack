@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#define ZPACK_VERSION "0.2.2"
-#define ZPACK_VERSION_INT 022
+#define ZPACK_VERSION "0.2.3"
+#define ZPACK_VERSION_INT 023
 
 // version required to read the file; not necessarily the current version
 // should be increased when a file structure change is made
@@ -47,13 +47,6 @@ namespace ZPack
     // types
     typedef std::vector<FileInfo *> EntryList;
     typedef std::unordered_map<std::string, FileInfo *> EntryMap;
-    typedef std::vector<std::pair<std::string, std::string>> FileList;
-    typedef std::vector<std::string> FileNameList;
-    typedef std::vector<std::pair<std::string, std::istream *>> IStreamList;
-    typedef std::vector<std::ostream *> OStreamList;
-    typedef std::pair<char *, size_t> Buffer;
-    typedef std::vector<Buffer> BufferList;
-    typedef std::vector<char *> FileDataList;
 
     /**
      * @brief Archive reader
@@ -101,14 +94,14 @@ namespace ZPack
         // unpacking operations
 
         /**
-         * Unpack a file into a std::ostream.
+         * Unpack a file into a stream.
          * @param info Information about the file.
          * @param dst The ostream to write to.
          */
         void UnpackFile(FileInfo *info, std::ostream &dst);
 
         /**
-         * Unpack a file into a char* buffer.
+         * Unpack a file into a buffer.
          * @param info Information about the file.
          * @param dst The char* buffer to write to.
          * @param dstCapacity The size of the buffer.
@@ -116,7 +109,7 @@ namespace ZPack
         void UnpackFile(FileInfo *info, char *dst, size_t dstCapacity);
 
         /**
-         * Unpack a file into a std::ostream.
+         * Unpack a file into a stream.
          * @param filename Name of the file.
          * @param dst The ostream to write to.
          */
@@ -129,34 +122,6 @@ namespace ZPack
          * @param dstCapacity The size of the buffer.
          */
         void UnpackFile(std::string filename, char *dst, size_t dstCapacity);
-
-        /**
-         * Unpack files into char* buffers.
-         * @param fileList A list of information about the files.
-         * @param bufferList A list of the buffers to write to.
-         */
-        void UnpackFiles(EntryList &fileList, BufferList &bufferList);
-
-        /**
-         * Unpack files into std::ostreams.
-         * @param fileList A list of information about the files.
-         * @param streamList A list of the ostreams to write to.
-         */
-        void UnpackFiles(EntryList &fileList, OStreamList &streamList);
-
-        /**
-         * Unpack files into char* buffers.
-         * @param fileList A list of filenames.
-         * @param bufferList A list of the buffers to write to.
-         */
-        void UnpackFiles(FileNameList &fileList, BufferList &bufferList);
-
-        /**
-         * Unpack files into std::ostreams.
-         * @param fileList A list of filenames.
-         * @param streamList A list of the ostreams to write to.
-         */
-        void UnpackFiles(FileNameList &fileList, OStreamList &streamList);
 
         // getters
 
@@ -182,11 +147,10 @@ namespace ZPack
                                      (in the CDR). */
         FileInfo* GetFileInfo(std::string filename); /**< Get a file's information. */
         bool Contains(std::string filename); /**< Check if the archive contains a file. */
-        bool Bad(); /**< Check if the reader is "bad".\n
+        bool Bad(); /**< Check if the reader's "bad" state is set.\n
         This is true when the archive is unreadable, invalid or when an unpacked file is invalid */
 
     private:
-        // file reader (calls all of the low level reading functions)
         bool ReadFile();
 
         // properties
@@ -204,7 +168,6 @@ namespace ZPack
 
         // zstd
         void* dStream; // actual type: ZSTD_DStream*
-        // but we're not gonna include zstd.h here
         void* inBuffer; // actual type: ZSTD_inBuffer*
         void* outBuffer; // actual type: ZSTD_outBuffer*
     };
@@ -258,24 +221,6 @@ namespace ZPack
         void WriteFile(std::string filename, std::string inputFile, int compressionLevel = 19);
 
         /**
-         * Compress and write multiple files into the archive. Also adds them into the entry list.
-         * Note that this does not write the complete archive; only the data of the file(s).
-         * @see Writer#PackFiles
-         * @param fileList A list of filename-istream pairs.
-         * @param compressionLevel The compression level to use for the files. Default: 19.
-         */
-        void WriteFiles(IStreamList &fileList, int compressionLevel = 19);
-
-        /**
-         * Compress and write multiple files into the archive. Also adds them into the entry list.
-         * Note that this does not write the complete archive; only the data of the file(s).
-         * @see Writer#PackFiles
-         * @param fileList A list of filename-file path pairs.
-         * @param compressionLevel The compression level to use for the files. Default: 19.
-         */
-        void WriteFiles(FileList &fileList, int compressionLevel = 19);
-
-        /**
          * Write the central directory record into the archive.
          */
         void WriteCDR();
@@ -285,24 +230,8 @@ namespace ZPack
          */
         void WriteEOCDR();
 
-        // packing operations
-
-        /**
-         * Compress files and write the complete archive.
-         * @param fileList A list of filename-istream pairs.
-         * @param compressionLevel The compression level to use for the files. Default: 19.
-         */
-        void PackFiles(IStreamList &fileList, int compressionLevel = 19);
-
-        /**
-         * Compress files and write the complete archive.
-         * @param fileList A list of filename-file path pairs.
-         * @param compressionLevel The compression level to use for the files. Default: 19.
-         */
-        void PackFiles(FileList &fileList, int compressionLevel = 19);
-
         // getters
-        bool Bad(); /**< Check if the reader is "bad".\n
+        bool Bad(); /**< Check if the writer's "bad" state is set.\n
         This is true when the archive is unwritable. */
         uint64_t GetUncompSize(); /**< Get the total uncompressed size of the archive's files. */
         uint64_t GetCompSize(); /**< Get the total compressed size of the archive's files. */
