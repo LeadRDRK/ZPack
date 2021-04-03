@@ -154,26 +154,6 @@ void Writer::WriteFile(std::string filename, std::string inputFile, int compress
     WriteFile(filename, &fileStream, compressionLevel);
 }
 
-void Writer::WriteFiles(IStreamList &fileList, int compressionLevel)
-{
-    for (auto pair: fileList)
-    {
-        auto filename = pair.first;
-        auto inputFile = pair.second;
-        WriteFile(filename, inputFile, compressionLevel);
-    }
-}
-
-void Writer::WriteFiles(FileList &fileList, int compressionLevel)
-{
-    for (auto pair: fileList)
-    {
-        auto filename = pair.first;
-        auto inputFile = pair.second;
-        WriteFile(filename, inputFile, compressionLevel);
-    }
-}
-
 void Writer::WriteCDR()
 {
     cdrOffset = file.tellp();

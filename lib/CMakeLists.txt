@@ -5,7 +5,6 @@ add_library(zpack
     reader.cpp
     unpacker.cpp
     writer.cpp
-    packer.cpp
     crc.cpp
 
     zpack.h
