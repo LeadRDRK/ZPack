@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <unordered_map>
 #include <vector>
 #include <zpack.h>
 #include <boost/filesystem.hpp>
@@ -28,17 +29,17 @@ void printUsage()
     std::cout <<
         PROGRAM_NAME ", by " AUTHOR "\n"
         "\n"
-        "Usage: zpack [options] ... <file>\n"
+        "Usage: zpack [options] ... <archive>\n"
         "\n"
         "Available options:\n"
-        "  -1 ... -22   : compression level\n"
-        "  --fast=#     : negative compression level\n"
-        "  -c, --create : create a new archive\n"
-        "  -u, --unpack : unpack an archive\n"
-        "  -o, --output : specify the output folder\n"
-        "  -l, --list   : list files in an archive\n"
-        "  -h, --help   : prints the usage and exit\n"
-        "  -v, --version: prints the version and exit\n"
+        "  -1 ... -22     : compression level\n"
+        "  -f, --fast [n] : very fast compression level\n"
+        "  -c, --create   : create a new archive\n"
+        "  -u, --unpack   : unpack an archive\n"
+        "  -o, --output   : specify the output folder\n"
+        "  -l, --list     : list files in an archive\n"
+        "  -h, --help     : prints the usage and exit\n"
+        "  -v, --version  : prints the version and exit\n"
         "\n"
         "Examples:\n"
         "  zpack -c /path/folder /path/file.txt archive.zpk\n"
@@ -78,7 +79,7 @@ void printUnpackStats(float timeElapsed, size_t numFiles)
 }
 
 // file name utils
-std::string getFileName(const std::string& fullPath)
+std::string getFilename(const std::string& fullPath)
 {
     const size_t lastSlashIndex = fullPath.find_last_of("/\\");
     return fullPath.substr(lastSlashIndex + 1);
@@ -99,49 +100,36 @@ std::string getFileExt(const std::string& fullPath)
     return ext;
 }
 
-void processDirEntry(const fs::directory_entry &entry, FileList &fileList,
-                     const std::string &ext, bool appendDirName)
+std::string getFullPath(const fs::path& path, int depth)
 {
-    const fs::path &path = entry.path();
-    // skip over directories
-    if (fs::is_directory(path))
-        return;
-
-    // extension check
-    std::string filename = path.filename().string();
-    if (!ext.empty())
+    std::string fullPath;
+    fs::path curPath(path);
+    for (int i = 0; i < depth + 1; ++i)
     {
-        if (getFileExt(filename) != ext)
-            return;
+        curPath = curPath.parent_path();
+        fullPath = curPath.filename().string() + "/" + fullPath;
     }
-
-    if (appendDirName)
-    {
-        filename = getFileName(path.parent_path().string()) + "/" + filename;
-    }
-    std::ifstream* file = new std::ifstream(path.string());
-    if (!file->is_open())
-    {
-        std::cerr << "FATAL: Failed to open " << path << "\n";
-        exit(1);
-    }
-    fileList.push_back({filename, file});
+    return fullPath;
 }
 
-void getDirFileList(const std::string &directory, const std::string &ext,
-                    FileList &fileList, bool appendDirName = false,
-                    bool recursive = false)
+void getDirFileList(const std::string &directory, FileList &fileList)
 {
-    if (recursive) {
-        for (auto& entry: fs::recursive_directory_iterator(directory))
+    for (auto entry = fs::recursive_directory_iterator(directory);
+              entry != fs::recursive_directory_iterator();
+            ++entry)
+    {
+        const fs::path &path = entry->path();
+        if (fs::is_directory(path))
+            continue;
+
+        std::string filename = getFullPath(path, entry.depth()) + path.filename().string();
+        std::ifstream* file = new std::ifstream(path.string());
+        if (!file->is_open())
         {
-            processDirEntry(entry, fileList, ext, appendDirName);
+            std::cerr << "FATAL: Failed to open " << path << "\n";
+            exit(1);
         }
-    } else {
-        for (auto& entry: fs::directory_iterator(directory))
-        {
-            processDirEntry(entry, fileList, ext, appendDirName);
-        }
+        fileList.push_back({filename, file});
     }
 }
 
@@ -149,24 +137,14 @@ void parsePathList(PathList &pathList, FileList &fileList)
 {
     for (auto path: pathList)
     {
-        std::string filename = getFileName(path);
-        if (filename.rfind("*", 0) == 0)
+        if (fs::is_directory(path))
         {
-            // directory wildcard
-            std::string directory = getFileDir(path);
-            std::string ext = getFileExt(path);
-            bool recursive = filename.rfind("**", 0) == 0;
-            getDirFileList(directory, ext, fileList, false, recursive);
-            continue;
-        }
-        else if (fs::is_directory(path))
-        {
-            getDirFileList(path, "", fileList, true, true);
+            getDirFileList(path, fileList);
             continue;
         }
         else
         {
-            std::string filename = getFileName(path);
+            std::string filename = getFilename(path);
             std::ifstream *file = new std::ifstream(path);
             fileList.push_back({filename, file});
         }
@@ -190,57 +168,56 @@ int createArchive(PathList &pathList, std::string &filename, int compressionLeve
         // automatically add extension
         filename += ".zpk";
     }
-    ZPack::Writer zpkWriter(filename);
-    if (zpkWriter.Bad())
+    ZPack::Writer zpkWriter;
+    if (zpkWriter.openFile(filename) != ZPack::OK)
     {
         std::cerr << "FATAL: Failed to open " << filename << "\n";
         return 1;
     }
         
     std::cout << "-- Writing header..." << std::endl;
-    zpkWriter.WriteHeader();
+    zpkWriter.writeHeader();
     std::cout << "-- Compressing files..." << std::endl;
     for (auto pair: fileList)
     {
         auto filename = pair.first;
         auto inputFile = pair.second;
         std::cout << " " << filename << std::endl;
-        zpkWriter.WriteFile(filename, inputFile, compressionLevel);
-        if (zpkWriter.Bad())
+        if (zpkWriter.writeFile(filename, inputFile, compressionLevel) != ZPack::OK)
         {
-            std::cerr << "FATAL: Failed to compress " << filename << "\n";
+            std::cerr << "FATAL: Failed to compress " << filename << std::endl;
             return 1;
         }
         // writefile does not close the file automatically
         inputFile->close();
     }
     std::cout << "-- Writing CDR..." << std::endl;
-    zpkWriter.WriteCDR();
+    zpkWriter.writeCDR();
     std::cout << "-- Writing EOCDR..." << std::endl;
-    zpkWriter.WriteEOCDR();
+    zpkWriter.writeEOCDR();
 
     steady_clock::time_point endTime = steady_clock::now();
     duration<float> timeElapsed = duration_cast<milliseconds>(endTime - startTime);
     printCreateStats(timeElapsed.count(), fileList.size(),
-                     zpkWriter.GetUncompSize(), zpkWriter.GetCompSize());
+                     zpkWriter.getUncompSize(), zpkWriter.getCompSize());
 
     return 0;
 }
 
-int unpackArchive(std::string &filename, std::string &outputFolder)
+int unpackArchive(const std::string &filename, const std::string &outputFolder)
 {
     steady_clock::time_point startTime = steady_clock::now();
 
-    ZPack::Reader zpkReader(filename);
-    if (zpkReader.Bad())
+    ZPack::Reader zpkReader;
+    if (zpkReader.openFile(filename) != ZPack::OK)
     {
-        std::cerr << "FATAL: File unreadable or invalid." << "\n";
+        std::cerr << "FATAL: File unreadable or invalid." << std::endl;
         return 1;
     }
 
     std::cout << "-- Unpacking files..." << std::endl;
     std::ofstream outputFile;
-    ZPack::EntryList entryList = zpkReader.GetEntryList();
+    ZPack::EntryList entryList = zpkReader.getEntryList();
     for (auto fileInfo: entryList)
     {
         std::cout << " " << fileInfo->filename << std::endl;
@@ -254,9 +231,8 @@ int unpackArchive(std::string &filename, std::string &outputFolder)
             std::cerr << "FATAL: Failed to open output file " << filePath << "\n";
             return 1;
         }
-
-        zpkReader.UnpackFile(fileInfo, outputFile);
-        if (zpkReader.Bad())
+        
+        if (zpkReader.unpackFile(fileInfo, outputFile) != ZPack::OK)
         {
             std::cerr << "FATAL: Failed to unpack " << fileInfo->filename << "\n";
             return 1;
@@ -295,11 +271,10 @@ void printArchiveEntry(uint64_t uncompSize, uint64_t compSize, const std::string
     std::endl;
 }
 
-int listArchive(std::string &filename)
+int listArchive(const std::string &filename)
 {
-
-    ZPack::Reader zpkReader(filename);
-    if (zpkReader.Bad())
+    ZPack::Reader zpkReader;
+    if (zpkReader.openFile(filename) != ZPack::OK)
     {
         std::cerr << "FATAL: File unreadable or invalid." << "\n";
         return 1;
@@ -309,7 +284,7 @@ int listArchive(std::string &filename)
                  "-----------  -----------  -------------------" <<
     std::endl;
 
-    ZPack::EntryList entryList = zpkReader.GetEntryList();
+    ZPack::EntryList entryList = zpkReader.getEntryList();
     for (auto fileInfo: entryList)
     {
         printArchiveEntry(fileInfo->uncompSize,
@@ -318,12 +293,36 @@ int listArchive(std::string &filename)
     }
 
     std::cout << "-----------  -----------  -------------------" << std::endl;
-    printArchiveEntry(zpkReader.GetUncompSize(),
-                      zpkReader.GetCompSize(),
+    printArchiveEntry(zpkReader.getUncompSize(),
+                      zpkReader.getCompSize(),
                       std::to_string(entryList.size()) + " file(s)");
 
     return 0;
 }
+
+// Arguments
+enum {
+    ARG_CREATE,
+    ARG_UNPACK,
+    ARG_OUTPUT,
+    ARG_LIST,
+    ARG_FAST,
+    ARG_HELP,
+    ARG_VERSION,
+};
+
+static std::unordered_map<std::string, int> argMap = {
+    {"-c",       ARG_CREATE},
+    {"--create", ARG_CREATE},
+    {"-u",       ARG_UNPACK},
+    {"--unpack", ARG_UNPACK},
+    {"-o",       ARG_OUTPUT},
+    {"--output", ARG_OUTPUT},
+    {"-l",       ARG_LIST},
+    {"--list",   ARG_LIST},
+    {"-f",       ARG_FAST},
+    {"--fast",   ARG_FAST},
+};
 
 int main(int argc, char **argv)
 {
@@ -331,91 +330,75 @@ int main(int argc, char **argv)
     std::string outputFolder = ".";
     PathList pathList;
     std::string filename = "";
-    int compressionLevel = 19;
+    int compressionLevel = 3;
     
     if (argc > 1)
     {
         for (int i = 1; i < argc; ++i)
         {
-            std::string arg(argv[i]);
+            std::string argStr(argv[i]);
 
             if (argc > 2 && i == argc - 1)
             {
-                filename = arg;
+                filename = argStr;
                 break;
             }
 
-            if (arg == "-c" || arg == "--create")
+            auto it = argMap.find(argStr);
+            if (it != argMap.end())
             {
-                mode = 1;
-                continue;
-            }
-            else if (arg == "-u" || arg == "--unpack")
-            {
-                mode = 2;
-                continue;
-            }
-            else if (arg == "-o" || arg == "--output")
-            {
-                outputFolder = argv[++i];
-                continue;
-            }
-            else if (arg == "-l" || arg == "--list")
-            {
-                mode = 3;
-                continue;
-            }
-            else if (arg == "-h" || arg == "--help")
-            {
-                printUsage();
-                return 0;
-            }
-            else if (arg == "-v" || arg == "--version")
-            {
-                std::cout <<
-                    PROGRAM_NAME "\n"
-                    "Copyright (c) 2020 LeadRDRK. Licensed under the BSD 3-Clause license.\n";
-                return 0;
-            }
-            else if (arg.rfind("--fast=", 0) == 0)
-            {
-                int temp;
-                try {
-                    temp = std::stoi(arg.substr(7));
-                    if (temp >= 1 && temp <= 22)
-                    {
-                        compressionLevel = -temp;
-                    }
+                switch (it->second)
+                {
+                case ARG_CREATE:
+                    mode = 1;
+                    continue;
+                case ARG_UNPACK:
+                    mode = 2;
+                    continue;
+                case ARG_OUTPUT:
+                    outputFolder = argv[++i];
+                    continue;
+                case ARG_LIST:
+                    mode = 3;
+                    continue;
+                case ARG_FAST:
+                {
+                    int level = atoi(argv[++i]);
+                    if (level >= 1 && level <= 22)
+                        compressionLevel = -level;
                     else {
-                        std::cout << "Invalid argument: " << arg << "\n";
+                        std::cout << "Invalid argument: " << argStr << "\n";
                         printUsage();
                         return 1;
                     }
+                    continue;
                 }
-                catch (int _) {}
+                case ARG_HELP:
+                    printUsage();
+                    return 0;
+                case ARG_VERSION:
+                    std::cout <<
+                        PROGRAM_NAME "\n"
+                        "Copyright (c) 2020 LeadRDRK. Licensed under the BSD 3-Clause license.\n";
+                    return 0;
+                }
             }
-            else if (std::isdigit(arg[1])) {
-                int temp;
-                try {
-                    temp = -std::stoi(arg);
-                    if (temp >= 1 && temp <= 22)
-                    {
-                        compressionLevel = temp;
-                    }
-                    else {
-                        std::cout << "Invalid argument: " << arg << "\n";
-                        printUsage();
-                        return 1;
-                    }
+            else if (std::isdigit(argStr[1])) {
+                int level = -atoi(argStr.c_str());
+                if (level >= 1 && level <= 22)
+                    compressionLevel = level;
+                else {
+                    std::cout << "Invalid argument: " << argStr << "\n";
+                    printUsage();
+                    return 1;
                 }
-                catch (int _) {}
             }
             else if (mode == 1)
             {
-                pathList.push_back(arg);
+                pathList.push_back(argStr);
             }
             else {
-                std::cout << "Invalid argument: " << arg << "\n";
+                std::cout << "Invalid argument: " << argStr << "\n";
                 printUsage();
                 return 1;
             }

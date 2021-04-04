@@ -34,7 +34,7 @@ Writer::Writer()
 Writer::Writer(std::string filename)
 : Writer()
 {
-    OpenFile(filename);
+    openFile(filename);
 }
 
 // destructors
@@ -46,24 +46,23 @@ Writer::~Writer()
 }
 
 // io stuff
-void Writer::OpenFile(std::string filename)
+int Writer::openFile(std::string filename)
 {
     file.open(filename, ios::binary);
-    if (!file.is_open())
-    {
-        bad = true;
-        return;
-    }
+    if (!file) return ERROR_WRITE_FAIL;
+    return OK;
 }
 
 // low level writing operations
-void Writer::WriteHeader()
+int Writer::writeHeader()
 {
     WriteLE32(file, FILE_SIG);
     WriteLE16(file, ZPACK_VERSION_REQUIRED);
+    if (!file) return ERROR_WRITE_FAIL;
+    return OK;
 }
 
-void Writer::WriteFile(std::string filename, std::istream* inputFile, int compressionLevel)
+int Writer::writeFile(std::string filename, std::istream* inputFile, int compressionLevel)
 {
     // cast all of the void* stuff into their actual type
     auto zcs = static_cast<ZSTD_CStream*>(cStream);
@@ -73,11 +72,6 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
     // set the compression level
     ZSTD_CCtx_setParameter(zcs, ZSTD_c_compressionLevel, compressionLevel);
 
-    // check the input file
-    if (inputFile->bad()) {
-        bad = true;
-        return;
-    }
     // create the file info
     FileInfo* fileInfo = new FileInfo();
     fileInfo->filename = filename;
@@ -112,7 +106,7 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
         inBuf->size = readSize;
 
         // calculate crc
-        crc.Add(charInBuf, readSize);
+        crc.add(charInBuf, readSize);
 
         // compress the file
         ZSTD_EndDirective mode = inputFile->eof() ? ZSTD_e_end : ZSTD_e_continue;
@@ -120,10 +114,8 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
         do {
             size_t remaining = ZSTD_compressStream2(zcs, outBuf, inBuf, mode);
             if (ZSTD_isError(remaining))
-            {
-                bad = true;
-                return;
-            }
+                return ERROR_COMPRESS_FAIL;
+
             file.write(charOutBuf, outBuf->pos);
             compressedSize += outBuf->pos;
             // From examples/streaming_compression.c
@@ -140,21 +132,24 @@ void Writer::WriteFile(std::string filename, std::istream* inputFile, int compre
         }
     }
     
-    fileInfo->crc = crc;
+    fileInfo->crc = crc.digest();
     fileInfo->compSize = compressedSize;
     compSize += compressedSize;
 
     // add file to the entry list
     entryList.push_back(fileInfo);
+
+    if (!file) return ERROR_WRITE_FAIL;
+    return OK;
 }
 
-void Writer::WriteFile(std::string filename, std::string inputFile, int compressionLevel)
+int Writer::writeFile(std::string filename, std::string inputFile, int compressionLevel)
 {
     ifstream fileStream(inputFile);
-    WriteFile(filename, &fileStream, compressionLevel);
+    return writeFile(filename, &fileStream, compressionLevel);
 }
 
-void Writer::WriteCDR()
+int Writer::writeCDR()
 {
     cdrOffset = file.tellp();
     WriteLE32(file, CDIR_SIG);
@@ -166,17 +161,14 @@ void Writer::WriteCDR()
         WriteLE64(file, info->uncompSize);
         WriteLE32(file, info->crc);
     }
+    if (!file) return ERROR_WRITE_FAIL;
+    return OK;
 }
 
-void Writer::WriteEOCDR()
+int Writer::writeEOCDR()
 {
     WriteLE32(file, EOCDR_SIG);
     WriteLE64(file, cdrOffset);
+    if (!file) return ERROR_WRITE_FAIL;
+    return OK;
 }
-
-// getters
-bool Writer::Bad()                { return bad; }
-uint64_t Writer::GetUncompSize()  { return uncompSize; }
-uint64_t Writer::GetCompSize()    { return compSize; }
-ofstream& Writer::GetFileStream() { return file; }
-EntryList Writer::GetEntryList()  { return entryList; }

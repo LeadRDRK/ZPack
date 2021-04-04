@@ -50,7 +50,7 @@ CRC32::CRC32()
 : crc(~0U)
 {}
 
-void CRC32::Add(char *buf, size_t size)
+void CRC32::add(char *buf, size_t size)
 {
     const uint8_t *p = (const uint8_t *)buf;
 
@@ -58,7 +58,7 @@ void CRC32::Add(char *buf, size_t size)
 		crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
 }
 
-uint32_t CRC32::Get()
+uint32_t CRC32::digest()
 {
     return crc ^ ~0U;
 }

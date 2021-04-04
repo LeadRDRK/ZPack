@@ -12,12 +12,9 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#define ZPACK_VERSION "0.2.3"
-#define ZPACK_VERSION_INT 023
-
-// version required to read the file; not necessarily the current version
-// should be increased when a file structure change is made
-#define ZPACK_VERSION_REQUIRED 020
+#define ZPACK_VERSION "0.3.0"
+#define ZPACK_VERSION_INT 030
+#define ZPACK_VERSION_REQUIRED 030
 
 namespace ZPack
 {
@@ -28,6 +25,31 @@ namespace ZPack
         const uint32_t FILE_SIG = 0x084b505a; // ZPK\x08
         const uint32_t CDIR_SIG = 0x074b505a; // ZPK\x07
         const uint32_t EOCDR_SIG = 0x064b505a; // ZPK\x06
+    };
+
+    // enums
+    /**
+     * @brief Return codes.
+     */
+    enum ReturnCode
+    {
+        OK, /**< All good. */
+
+        // reader
+        ERROR_READ_FAIL, /**< The archive couldn't be read. */
+        ERROR_FILE_TOO_SMALL, /**< The archive is too small. */
+        ERROR_INVALID_SIGNATURE, /**< The archive's signature is invalid. */
+        ERROR_VERSION_INSUFFICIENT, /**< The reader's version is too low to read the archive. */
+        ERROR_DECOMPRESS_FAIL, /**< Failed to decompress the file. */
+        ERROR_CHECKSUM_MISMATCH, /**< The decompressed file's checksum does not match the original checksum. */
+        ERROR_DST_TOO_SMALL, /**< The destination buffer is too small. */
+
+        // reader/writer
+        ERROR_ILLEGAL_FILENAME, /**< One of the filenames in the archive contains an illegal pathname. */
+
+        // writer
+        ERROR_WRITE_FAIL, /**< The archive couldn't be written. */
+        ERROR_COMPRESS_FAIL /**< Failed to compress the file. */
     };
 
     // structs
@@ -46,7 +68,6 @@ namespace ZPack
 
     // types
     typedef std::vector<FileInfo *> EntryList;
-    typedef std::unordered_map<std::string, FileInfo *> EntryMap;
 
     /**
      * @brief Archive reader
@@ -67,7 +88,7 @@ namespace ZPack
          * Open an archive for reading.
          * @param filename Name of the file.
          */
-        void OpenFile(std::string filename);
+        int openFile(std::string filename);
         
         // low level reading operations
 
@@ -75,21 +96,20 @@ namespace ZPack
          * Read the header of an archive.
          * @param reqVersion (Output) Required version to read the file.
          */
-        bool ReadHeader(uint16_t &reqVersion);
+        int readHeader(uint16_t &reqVersion);
 
         /**
          * Read the end of central directory record of an archive.
          * @param cdrOffset (Output) Offset of the central directory record in the archive.
          */
-        bool ReadEOCDR(uint64_t &cdrOffset);
+        int readEOCDR(uint64_t &cdrOffset);
 
         /**
          * Read central directory record of an archive.
          * @param cdrOffset Offset of the central directory record in the archive.
          * @param entryList (Output) List of entries in the CDR.
-         * @param entryMap (Output) List of entries in the CDR mapped by their filenames.
          */
-        bool ReadCDR(uint64_t cdrOffset, EntryList &entryList, EntryMap &entryMap);
+        int readCDR(uint64_t cdrOffset, EntryList &entryList);
 
         // unpacking operations
 
@@ -98,7 +118,7 @@ namespace ZPack
          * @param info Information about the file.
          * @param dst The ostream to write to.
          */
-        void UnpackFile(FileInfo *info, std::ostream &dst);
+        int unpackFile(FileInfo *info, std::ostream &dst);
 
         /**
          * Unpack a file into a buffer.
@@ -106,14 +126,14 @@ namespace ZPack
          * @param dst The char* buffer to write to.
          * @param dstCapacity The size of the buffer.
          */
-        void UnpackFile(FileInfo *info, char *dst, size_t dstCapacity);
+        int unpackFile(FileInfo *info, char *dst, size_t dstCapacity);
 
         /**
          * Unpack a file into a stream.
          * @param filename Name of the file.
          * @param dst The ostream to write to.
          */
-        void UnpackFile(std::string filename, std::ostream &dst);
+        int unpackFile(std::string filename, std::ostream &dst);
 
         /**
          * Unpack a file into a char* buffer.
@@ -121,41 +141,42 @@ namespace ZPack
          * @param dst The char* buffer to write to.
          * @param dstCapacity The size of the buffer.
          */
-        void UnpackFile(std::string filename, char *dst, size_t dstCapacity);
+        int unpackFile(std::string filename, char *dst, size_t dstCapacity);
 
         // getters
+        /**
+         * Get a file's information.
+         * @param filename Name of the file.
+         */
+        FileInfo* getFileInfo(std::string filename);
+
+        /**
+         * Check if the archive contains a file.
+         * @param filename Name of the file.
+         */
+        bool contains(std::string filename);
 
         /**
          * Get the file's uncompressed size. Shorthand for GetFileInfo(filename)->uncompSize.
          * Returns 0 if the file does not exist.
          * @param filename Name of the file.
          */
-        uint64_t GetFileUncompSize(std::string filename);
+        uint64_t getFileUncompSize(std::string filename);
 
         /**
          * Get the file's compressed size. Shorthand for GetFileInfo(filename)->compSize.
          * Returns 0 if the file does not exist.
          * @param filename Name of the file.
          */
-        uint64_t GetFileCompSize(std::string filename);
+        uint64_t getFileCompSize(std::string filename);
         
-        uint64_t GetUncompSize(); /**< Get the total uncompressed size of the archive's files. */
-        uint64_t GetCompSize(); /**< Get the total compressed size of the archive's files. */
-        std::ifstream& GetFileStream(); /**< Get the underlying input file stream. */
-        EntryList GetEntryList(); /**< Get the list of file entries (in the CDR). */
-        EntryMap GetEntryMap(); /**< Get the list of file entries mapped to their filenames 
-                                     (in the CDR). */
-        FileInfo* GetFileInfo(std::string filename); /**< Get a file's information. */
-        bool Contains(std::string filename); /**< Check if the archive contains a file. */
-        bool Bad(); /**< Check if the reader's "bad" state is set.\n
-        This is true when the archive is unreadable, invalid or when an unpacked file is invalid */
+        inline uint64_t getUncompSize() { return uncompSize; }; /**< Get the total uncompressed size of the archive's files. */
+        inline uint64_t getCompSize() { return compSize; }; /**< Get the total compressed size of the archive's files. */
+        inline std::ifstream& getFileStream() { return file; }; /**< Get the underlying input file stream. */
+        inline EntryList getEntryList() { return entryList; }; /**< Get the list of file entries. */
 
     private:
-        bool ReadFile();
-
-        // properties
-        // bad - set when the file is unreadable or invalid
-        bool bad = false;
+        int readFile();
 
         // file
         std::ifstream file;
@@ -164,7 +185,6 @@ namespace ZPack
 
         // entries
         EntryList entryList;
-        EntryMap entryMap;
 
         // zstd
         void* dStream; // actual type: ZSTD_DStream*
@@ -191,14 +211,14 @@ namespace ZPack
          * Open an archive for writing.
          * @param filename Name of the file.
          */
-        void OpenFile(std::string filename);
+        int openFile(std::string filename);
 
         // low level writing operations
 
         /**
          * Write the header into the archive.
          */
-        void WriteHeader();
+        int writeHeader();
 
         /**
          * Compress and write the file into the archive. Also adds the file into the entry list.
@@ -206,43 +226,36 @@ namespace ZPack
          * @see Writer#PackFiles
          * @param filename Name of the file (in the CDR entry).
          * @param inputFile The istream of the file.
-         * @param compressionLevel The compression level to use for the file. Default: 19.
+         * @param compressionLevel The compression level to use for the file. Default: 3.
          */
-        void WriteFile(std::string filename, std::istream* inputFile, int compressionLevel = 19);
+        int writeFile(std::string filename, std::istream* inputFile, int compressionLevel = 3);
 
         /**
          * Compress and write the file into the archive. Also adds the file into the entry list.
          * Note that this does not write the complete archive; only the data of the file(s).
-         * @see Writer#PackFiles
          * @param filename Name of the file (in the CDR entry).
          * @param inputFile Path to the file.
-         * @param compressionLevel The compression level to use for the file. Default: 19.
+         * @param compressionLevel The compression level to use for the file. Default: 3.
          */
-        void WriteFile(std::string filename, std::string inputFile, int compressionLevel = 19);
+        int writeFile(std::string filename, std::string inputFile, int compressionLevel = 3);
 
         /**
          * Write the central directory record into the archive.
          */
-        void WriteCDR();
+        int writeCDR();
 
         /**
          * Write the end of central directory record into the archive.
          */
-        void WriteEOCDR();
+        int writeEOCDR();
 
         // getters
-        bool Bad(); /**< Check if the writer's "bad" state is set.\n
-        This is true when the archive is unwritable. */
-        uint64_t GetUncompSize(); /**< Get the total uncompressed size of the archive's files. */
-        uint64_t GetCompSize(); /**< Get the total compressed size of the archive's files. */
-        std::ofstream& GetFileStream(); /**< Get the underlying output file stream. */
-        EntryList GetEntryList(); /**< Get the list of file entries to be written to the CDR. */
+        inline uint64_t getUncompSize() { return uncompSize; }; /**< Get the total uncompressed size of the archive's files. */
+        inline uint64_t getCompSize() { return compSize; }; /**< Get the total compressed size of the archive's files. */
+        inline std::ofstream& getFileStream() { return file; }; /**< Get the underlying output file stream. */
+        inline EntryList getEntryList() { return entryList; }; /**< Get the list of file entries. */
 
     private:
-        // properties
-        // bad - set when the file is unwritable
-        bool bad = false;
-
         // file
         std::ofstream file;
         uint64_t uncompSize = 0;
