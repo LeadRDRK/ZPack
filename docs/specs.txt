@@ -1,6 +1,6 @@
                        ZPack
                 File Specifications
-                v0.2.0 (17/08/2020)
+                v0.3.0 (04/04/2021)
   Copyright (c) 2020 LeadRDRK. All rights reserved.
   Everyone is permitted to copy and distribute this
   document in any form. External modifications are
@@ -10,6 +10,9 @@
 
 Changelog
 ----------
+  v0.3.0   Changed the filename length to an unsigned short
+           integer (2 bytes)
+           Added file naming rules.
   v0.2.1   Removed some unnecessary information.
   v0.2.0   Added a uncompressed size field in the file 
            record.
@@ -18,8 +21,7 @@ Changelog
 Synopsis
 ---------
   ZPack is a simple, general-purpose archive file
-  format with lossless data compression. It is based 
-  on the ZIP/ZIP64 format by PKWARE.
+  format with lossless data compression.
   
   It exclusively uses the Zstandard compression algorithm
   for file compression (hence the name). The default
@@ -59,7 +61,11 @@ Central directory record
   
 File record
 ------------
-  filename length (n)        4 bytes
+  Contains information about a file.
+  The filename follows a specific set of rules; see the
+  "File naming rules" section below.
+
+  filename length (n)        2 bytes
   filename                   n bytes
   file offset                8 bytes
   compressed size            8 bytes
@@ -68,5 +74,27 @@ File record
 
 End of central directory record
 --------------------------------
+  Because the file data section is of a variable size,
+  an end of central directory record is needed to determine
+  the offset of the central directory record.
+
   signature                  4 bytes (0x5a504b13)
   central dir record offset  8 bytes
+
+File naming rules
+-----------------
+  The filename can be a path (e.g. path/to/file).
+  However, it must not be relative to any directory,
+  either in the archive or in the user's filesystem.
+
+  These filenames are considered illegal:
+  * path/../to/file
+  * ../path/to/file
+  * path/./to/file
+  * ./path/to/file
+
+  The path may contain forward slashes (/) or backward
+  slashes (\) depending on the filesystem/operating
+  system that the archive was created on.
+
+  The max filename length is 65535 characters.

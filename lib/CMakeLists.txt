@@ -3,7 +3,6 @@ find_package(ZSTD REQUIRED)
 
 add_library(zpack
     reader.cpp
-    unpacker.cpp
     writer.cpp
     crc.cpp
 
