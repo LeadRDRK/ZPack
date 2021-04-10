@@ -1,6 +1,6 @@
 /*
     zpack.h - ZPack library - Header
-    Copyright (c) 2020 LeadRDRK
+    Copyright (c) 2021 LeadRDRK
     Licensed under the BSD 3-Clause license.
     Check the LICENSE file for more information.
 */
@@ -11,7 +11,6 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <unordered_map>
 #define ZPACK_VERSION "0.3.0"
 #define ZPACK_VERSION_INT 030
 #define ZPACK_VERSION_REQUIRED 030
@@ -27,7 +26,6 @@ namespace ZPack
         const uint32_t EOCDR_SIG = 0x064b505a; // ZPK\x06
     };
 
-    // enums
     /**
      * @brief Return codes.
      */
@@ -39,18 +37,28 @@ namespace ZPack
         ERROR_READ_FAIL, /**< The archive couldn't be read. */
         ERROR_FILE_TOO_SMALL, /**< The archive is too small. */
         ERROR_INVALID_SIGNATURE, /**< The archive's signature is invalid. */
+        ERROR_INVALID_FILE_RECORD, /**< One of the file records is invalid. */
         ERROR_VERSION_INSUFFICIENT, /**< The reader's version is too low to read the archive. */
         ERROR_DECOMPRESS_FAIL, /**< Failed to decompress the file. */
         ERROR_CHECKSUM_MISMATCH, /**< The decompressed file's checksum does not match the original checksum. */
         ERROR_DST_TOO_SMALL, /**< The destination buffer is too small. */
 
         // reader/writer
-        ERROR_ILLEGAL_FILENAME, /**< One of the filenames in the archive contains an illegal pathname. */
+        ERROR_ILLEGAL_FILENAME, /**< One of the filenames contains an illegal path. */
 
         // writer
         ERROR_WRITE_FAIL, /**< The archive couldn't be written. */
-        ERROR_COMPRESS_FAIL /**< Failed to compress the file. */
+        ERROR_COMPRESS_FAIL, /**< Failed to compress the file. */
+        ERROR_FILENAME_TOO_LONG /**< The filename is too long. */
     };
+
+    /**
+     * Gets the error message for the specified error code. Returns a nullptr if the
+     * code is out of range.
+     * @param error The error code.
+     * @return The error message corresponding to the error code.
+     */
+    const char* getErrorMessage(int error);
 
     // structs
 

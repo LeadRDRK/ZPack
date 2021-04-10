@@ -1,6 +1,6 @@
 /*
     zpack-cli.cpp - ZPack command line interface
-    Copyright (c) 2020 LeadRDRK
+    Copyright (c) 2021 LeadRDRK
     Licensed under the BSD 3-Clause license.
     Check the LICENSE file for more information.
 */
@@ -104,25 +104,32 @@ std::string getFullPath(const fs::path& path, int depth)
 {
     std::string fullPath;
     fs::path curPath(path);
-    for (int i = 0; i < depth + 1; ++i)
+    for (int i = 0; i < depth + 2; ++i)
     {
-        curPath = curPath.parent_path();
         fullPath = curPath.filename().string() + "/" + fullPath;
+        curPath = curPath.parent_path();
     }
     return fullPath;
 }
 
 void getDirFileList(const std::string &directory, FileList &fileList)
 {
+    std::string rootPrefix = getFilename(directory) + "/";
+    std::string prefix = rootPrefix;
     for (auto entry = fs::recursive_directory_iterator(directory);
               entry != fs::recursive_directory_iterator();
             ++entry)
     {
         const fs::path &path = entry->path();
         if (fs::is_directory(path))
+        {
+            prefix = getFullPath(path, entry.depth());
             continue;
+        }
+        if (entry.depth() == 0 && prefix != rootPrefix)
+            prefix = rootPrefix;
 
-        std::string filename = getFullPath(path, entry.depth()) + path.filename().string();
+        std::string filename = prefix + path.filename().string();
         std::ifstream* file = new std::ifstream(path.string());
         if (!file->is_open())
         {
@@ -168,10 +175,12 @@ int createArchive(PathList &pathList, std::string &filename, int compressionLeve
         // automatically add extension
         filename += ".zpk";
     }
+
+    int ret;
     ZPack::Writer zpkWriter;
-    if (zpkWriter.openFile(filename) != ZPack::OK)
+    if ((ret = zpkWriter.openFile(filename)) != ZPack::OK)
     {
-        std::cerr << "FATAL: Failed to open " << filename << "\n";
+        std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
         return 1;
     }
         
@@ -183,9 +192,9 @@ int createArchive(PathList &pathList, std::string &filename, int compressionLeve
         auto filename = pair.first;
         auto inputFile = pair.second;
         std::cout << " " << filename << std::endl;
-        if (zpkWriter.writeFile(filename, inputFile, compressionLevel) != ZPack::OK)
+        if ((ret = zpkWriter.writeFile(filename, inputFile, compressionLevel)) != ZPack::OK)
         {
-            std::cerr << "FATAL: Failed to compress " << filename << std::endl;
+            std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
             return 1;
         }
         // writefile does not close the file automatically
@@ -208,10 +217,12 @@ int unpackArchive(const std::string &filename, const std::string &outputFolder)
 {
     steady_clock::time_point startTime = steady_clock::now();
 
+    std::cout << "-- Reading archive..." << std::endl;
+    int ret;
     ZPack::Reader zpkReader;
-    if (zpkReader.openFile(filename) != ZPack::OK)
+    if ((ret = zpkReader.openFile(filename)) != ZPack::OK)
     {
-        std::cerr << "FATAL: File unreadable or invalid." << std::endl;
+        std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
         return 1;
     }
 
@@ -232,9 +243,9 @@ int unpackArchive(const std::string &filename, const std::string &outputFolder)
             return 1;
         }
         
-        if (zpkReader.unpackFile(fileInfo, outputFile) != ZPack::OK)
+        if ((ret = zpkReader.unpackFile(fileInfo, outputFile)) != ZPack::OK)
         {
-            std::cerr << "FATAL: Failed to unpack " << fileInfo->filename << "\n";
+            std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
             return 1;
         }
         outputFile.close();
@@ -273,10 +284,11 @@ void printArchiveEntry(uint64_t uncompSize, uint64_t compSize, const std::string
 
 int listArchive(const std::string &filename)
 {
+    int ret;
     ZPack::Reader zpkReader;
-    if (zpkReader.openFile(filename) != ZPack::OK)
+    if ((ret = zpkReader.openFile(filename)) != ZPack::OK)
     {
-        std::cerr << "FATAL: File unreadable or invalid." << "\n";
+        std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
         return 1;
     }
 
@@ -379,7 +391,7 @@ int main(int argc, char **argv)
                 case ARG_VERSION:
                     std::cout <<
                         PROGRAM_NAME "\n"
-                        "Copyright (c) 2020 LeadRDRK. Licensed under the BSD 3-Clause license.\n";
+                        "Copyright (c) 2021 LeadRDRK. Licensed under the BSD 3-Clause license.\n";
                     return 0;
                 }
             }
