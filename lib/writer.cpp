@@ -1,6 +1,6 @@
 /*
     writer.cpp - ZPack library - File writer [ZPack::Writer]
-    Copyright (c) 2020 LeadRDRK
+    Copyright (c) 2021 LeadRDRK
     Licensed under the BSD 3-Clause license.
     Check the LICENSE file for more information.
 */
@@ -8,7 +8,9 @@
 #include "zpack.h"
 #include "zpack_utils.h"
 #include "zpack_crc.h"
+#include <cstdint>
 #include <zstd.h>
+#include <climits>
 using namespace ZPack;
 using namespace Detail;
 using std::ios;
@@ -154,7 +156,11 @@ int Writer::writeCDR()
     cdrOffset = file.tellp();
     WriteLE32(file, CDIR_SIG);
     for (FileInfo *info: entryList) {
-        WriteLE32(file, info->filename.length());
+        size_t filenameLen = info->filename.length();
+        if (filenameLen > UINT16_MAX)
+            return ERROR_FILENAME_TOO_LONG;
+
+        WriteLE16(file, filenameLen);
         file << info->filename;
         WriteLE64(file, info->fileOffset);
         WriteLE64(file, info->compSize);

@@ -1,7 +1,7 @@
                        ZPack
                 File Specifications
                 v0.3.0 (04/04/2021)
-  Copyright (c) 2020 LeadRDRK. All rights reserved.
+  Copyright (c) 2021 LeadRDRK. All rights reserved.
   Everyone is permitted to copy and distribute this
   document in any form. External modifications are
   welcome but must not be misrepresented as the 

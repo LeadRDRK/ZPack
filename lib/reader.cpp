@@ -1,6 +1,6 @@
 /*
     reader.cpp - ZPack library - File reader [ZPack::Reader]
-    Copyright (c) 2020 LeadRDRK
+    Copyright (c) 2021 LeadRDRK
     Licensed under the BSD 3-Clause license.
     Check the LICENSE file for more information.
 */
@@ -8,11 +8,12 @@
 #include "zpack.h"
 #include "zpack_utils.h"
 #include "zpack_crc.h"
-#include <bits/stdint-uintn.h>
+#include <cstdint>
 #include <sstream>
 #include <ostream>
 #include <streambuf>
 #include <zstd.h>
+#include <climits>
 using namespace ZPack;
 using namespace Detail;
 using std::ios;
@@ -108,9 +109,8 @@ int Reader::readHeader(uint16_t &reqVersion)
 {
     file.seekg(0, file.beg);
     // verify the file's signature
-    if (InvalidSig(file, FILE_SIG)) {
+    if (InvalidSig(file, FILE_SIG))
         return ERROR_INVALID_SIGNATURE;
-    }
 
     // read the required version
     ReadLE16(file, reqVersion);
@@ -146,7 +146,7 @@ int Reader::readCDR(uint64_t cdrOffset, EntryList &entryList)
         if (file.eof())
         {
             // file should never reach eof while reading the cdr
-            return false;
+            return ERROR_INVALID_FILE_RECORD;
         }
         // seek back 4 characters because signature check already moved the read pos
         file.seekg(-4, file.cur);
@@ -154,8 +154,8 @@ int Reader::readCDR(uint64_t cdrOffset, EntryList &entryList)
         FileInfo *entry = new FileInfo();
 
         // read the filename length
-        uint32_t filenameLen = 0;
-        ReadLE32(file, filenameLen);
+        uint16_t filenameLen = 0;
+        ReadLE16(file, filenameLen);
 
         // read the filename
         char *filename = new char[filenameLen];
