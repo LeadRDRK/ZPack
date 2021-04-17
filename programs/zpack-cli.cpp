@@ -5,6 +5,7 @@
     Check the LICENSE file for more information.
 */
 
+#include <boost/filesystem/operations.hpp>
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -158,6 +159,13 @@ void parsePathList(PathList &pathList, FileList &fileList)
     }
 }
 
+void handleCreateError(int ret, const std::string& filename)
+{
+    std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
+    fs::remove(filename);
+    exit(1);
+}
+
 int createArchive(PathList &pathList, std::string &filename, int compressionLevel)
 {
     steady_clock::time_point startTime = steady_clock::now();
@@ -185,25 +193,28 @@ int createArchive(PathList &pathList, std::string &filename, int compressionLeve
     }
         
     std::cout << "-- Writing header..." << std::endl;
-    zpkWriter.writeHeader();
+    if ((ret = zpkWriter.writeHeader()) != ZPack::OK)
+        handleCreateError(ret, filename);
+
     std::cout << "-- Compressing files..." << std::endl;
     for (auto pair: fileList)
     {
         auto filename = pair.first;
         auto inputFile = pair.second;
         std::cout << " " << filename << std::endl;
-        if ((ret = zpkWriter.writeFile(filename, inputFile, compressionLevel)) != ZPack::OK)
-        {
-            std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
-            return 1;
-        }
-        // writefile does not close the file automatically
+
+        if ((ret = zpkWriter.writeFileStream(filename, inputFile, compressionLevel)) != ZPack::OK)
+            handleCreateError(ret, filename);
+
         inputFile->close();
     }
     std::cout << "-- Writing CDR..." << std::endl;
-    zpkWriter.writeCDR();
+    if ((ret = zpkWriter.writeCDR()) != ZPack::OK)
+        handleCreateError(ret, filename);
+
     std::cout << "-- Writing EOCDR..." << std::endl;
-    zpkWriter.writeEOCDR();
+    if ((ret = zpkWriter.writeEOCDR()) != ZPack::OK)
+        handleCreateError(ret, filename);
 
     steady_clock::time_point endTime = steady_clock::now();
     duration<float> timeElapsed = duration_cast<milliseconds>(endTime - startTime);
@@ -229,31 +240,41 @@ int unpackArchive(const std::string &filename, const std::string &outputFolder)
     std::cout << "-- Unpacking files..." << std::endl;
     std::ofstream outputFile;
     ZPack::EntryList entryList = zpkReader.getEntryList();
+    size_t unpackCount = 0;
     for (auto fileInfo: entryList)
     {
-        std::cout << " " << fileInfo->filename << std::endl;
+        std::cout << " " << fileInfo.filename << std::endl;
 
-        fs::path filePath(outputFolder + "/" + fileInfo->filename);
-        fs::create_directories(filePath.parent_path());
+        fs::path filePath(outputFolder + "/" + fileInfo.filename);
+        if (!fs::exists(filePath.parent_path()))
+            fs::create_directories(filePath.parent_path());
+        if (fs::equivalent(filename, filePath))
+        {
+            std::cout << "Warning: Archive contains itself, ignoring." << std::endl;
+            continue;
+        }
+
         outputFile.open(filePath.string(),
                         std::ios::trunc | std::ios::binary);
         if (!outputFile.is_open())
         {
-            std::cerr << "FATAL: Failed to open output file " << filePath << "\n";
-            return 1;
+            std::cerr << "Error: Failed to open output file " << filePath << "\n";
+            continue;
         }
         
-        if ((ret = zpkReader.unpackFile(fileInfo, outputFile)) != ZPack::OK)
+        if ((ret = zpkReader.unpackFileStream(&fileInfo, outputFile)) != ZPack::OK)
         {
             std::cerr << "FATAL: " << ZPack::getErrorMessage(ret) << "\n";
             return 1;
         }
         outputFile.close();
+
+        ++unpackCount;
     }
 
     steady_clock::time_point endTime = steady_clock::now();
     duration<float> timeElapsed = duration_cast<milliseconds>(endTime - startTime);
-    printUnpackStats(timeElapsed.count(), entryList.size());
+    printUnpackStats(timeElapsed.count(), unpackCount);
 
     return 0;
 }
@@ -299,9 +320,9 @@ int listArchive(const std::string &filename)
     ZPack::EntryList entryList = zpkReader.getEntryList();
     for (auto fileInfo: entryList)
     {
-        printArchiveEntry(fileInfo->uncompSize,
-                          fileInfo->compSize,
-                          fileInfo->filename);
+        printArchiveEntry(fileInfo.uncompSize,
+                          fileInfo.compSize,
+                          fileInfo.filename);
     }
 
     std::cout << "-----------  -----------  -------------------" << std::endl;

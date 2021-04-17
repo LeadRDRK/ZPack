@@ -1,6 +1,6 @@
                        ZPack
                 File Specifications
-                v0.3.0 (04/04/2021)
+                v1.0.0 (16/04/2021)
   Copyright (c) 2021 LeadRDRK. All rights reserved.
   Everyone is permitted to copy and distribute this
   document in any form. External modifications are
@@ -8,29 +8,28 @@
   original document.
 -----------------------------------------------------
 
-Changelog
-----------
-  v0.3.0   Changed the filename length to an unsigned short
-           integer (2 bytes)
-           Added file naming rules.
-  v0.2.1   Removed some unnecessary information.
-  v0.2.0   Added a uncompressed size field in the file 
-           record.
-  v0.1.0   Added a file offset field in the file record.
-  
+Definitions
+------------
+  "The Program" refers to any code that is written to
+  handle this file format.
+
+  "The Archive" refers to ZPack-formatted files.
+
+  "CDR" and "EOCDR" are abbreviations for "central directory
+  record" and "end of central directory record", respectively.
+
 Synopsis
 ---------
   ZPack is a simple, general-purpose archive file
   format with lossless data compression.
   
   It exclusively uses the Zstandard compression algorithm
-  for file compression (hence the name). The default
-  compression level is 19.
+  for file compression (hence the name).
 
   The file extension for ZPack-formatted files is .zpk
   
-General format of a ZPack file
--------------------------------
+General archive structure
+--------------------------
   [ZPack header]
   [File data 1]
   [File data 2]
@@ -39,13 +38,27 @@ General format of a ZPack file
   [Central directory record]
   [End of central directory record]
   
-  All values must be stored in little-endian byte order
-  unless specifically noted.
+  All field values are unsigned integers stored in
+  little-endian byte order unless specifically noted.
 
 ZPack header
 -------------
-  magic number               4 bytes (0x5a504b15)
-  minimum version required   2 bytes
+  Field                      Size     Description
+  -------------------------  -------  ------------
+  signature                  4 bytes  ZPack header signature (0x5a504b15)
+  archive version            2 bytes  The archive's version.
+  
+  Starting from version 1.0.0, the archive's version is
+  the revision number. For example, version 1.0.0 is 0,
+  but version 2.0.0 might be 21 if there has been 21 other
+  versions that came before it.
+
+File data
+----------
+  This is the file's compressed data. It contains
+  one or more Zstandard frames (and skippable frames)
+  For more information, refer to the Zstandard
+  compression format specification.
 
 Central directory record
 -------------------------
@@ -53,7 +66,9 @@ Central directory record
   multiple file records and follows the following
   format:
   
-  signature                  4 bytes (0x5a504b14)
+  Field                      Size     Description
+  -------------------------  -------  ------------
+  signature                  4 bytes  ZPack CDR signature (0x5a504b14)
   [file record 1]
   [file record 2]
   ...
@@ -65,12 +80,16 @@ File record
   The filename follows a specific set of rules; see the
   "File naming rules" section below.
 
-  filename length (n)        2 bytes
-  filename                   n bytes
-  file offset                8 bytes
-  compressed size            8 bytes
-  uncompressed size          8 bytes
-  file hash (crc32)          4 bytes
+  Field                      Size     Description
+  -------------------------  -------  ------------
+  filename length (n)        2 bytes  Length of the filename.
+  filename                   n bytes  UTF-8 formatted string representing
+                                      the file's name.
+  file offset                8 bytes  Offset of the file's data from the
+                                      start of the archive.
+  compressed size            8 bytes  The file's compressed size.
+  uncompressed size          8 bytes  The file's uncompressed size.
+  file hash (crc32)          4 bytes  CRC32 digest of the file.
 
 End of central directory record
 --------------------------------
@@ -78,8 +97,11 @@ End of central directory record
   an end of central directory record is needed to determine
   the offset of the central directory record.
 
-  signature                  4 bytes (0x5a504b13)
-  central dir record offset  8 bytes
+  Field                      Size     Description
+  -------------------------  -------  ------------
+  signature                  4 bytes  The ZPack EOCDR signature (0x5a504b13)
+  CDR offset                 8 bytes  Offset of the CDR from the start of
+                                      the archive. 
 
 File naming rules
 -----------------
@@ -87,7 +109,9 @@ File naming rules
   However, it must not be relative to any directory,
   either in the archive or in the user's filesystem.
 
-  These filenames are considered illegal:
+  For example, these filenames are considered illegal:
+  * .
+  * ..
   * path/../to/file
   * ../path/to/file
   * path/./to/file
@@ -95,6 +119,9 @@ File naming rules
 
   The path may contain forward slashes (/) or backward
   slashes (\) depending on the filesystem/operating
-  system that the archive was created on.
+  system that the archive was created on. The program
+  itself must handle these seperators accordingly.
 
-  The max filename length is 65535 characters.
+  The max filename length is 65535 characters (as per
+  the max value of an unsigned 16-bit integer)
+  

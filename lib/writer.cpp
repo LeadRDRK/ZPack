@@ -19,21 +19,19 @@ using std::ofstream;
 
 // constructors
 Writer::Writer()
-: cStream(static_cast<void*>(ZSTD_createCStream())),
-  inBuffer(static_cast<void*>(new ZSTD_inBuffer())),
-  outBuffer(static_cast<void*>(new ZSTD_outBuffer()))
+: cCtx(ZSTD_createCStream()),
+  inBuffer(new ZSTD_inBuffer()),
+  outBuffer(new ZSTD_outBuffer())
 {
-    auto inBuf = static_cast<ZSTD_inBuffer*>(inBuffer);
-    auto outBuf = static_cast<ZSTD_outBuffer*>(outBuffer);
     // create the in buffer
-    inBuf->size = ZSTD_CStreamInSize();
-    inBuf->src = new char[inBuf->size];
+    inBuffer->size = ZSTD_CStreamInSize();
+    inBuffer->src = new char[inBuffer->size];
     // create the out buffer
-    outBuf->size = ZSTD_CStreamOutSize();
-    outBuf->dst = new char[outBuf->size];
+    outBuffer->size = ZSTD_CStreamOutSize();
+    outBuffer->dst = new char[outBuffer->size];
 }
 
-Writer::Writer(std::string filename)
+Writer::Writer(const std::string& filename)
 : Writer()
 {
     openFile(filename);
@@ -42,41 +40,136 @@ Writer::Writer(std::string filename)
 // destructors
 Writer::~Writer()
 {
-    ZSTD_freeCStream(static_cast<ZSTD_CStream*>(cStream));
+    file.close();
+    ZSTD_freeCStream(static_cast<ZSTD_CStream*>(cCtx));
     delete static_cast<ZSTD_inBuffer*>(inBuffer);
     delete static_cast<ZSTD_outBuffer*>(outBuffer);
 }
 
 // io stuff
-int Writer::openFile(std::string filename)
+int Writer::openFile(const std::string& filename)
 {
     file.open(filename, ios::binary);
     if (!file) return ERROR_WRITE_FAIL;
     return OK;
 }
 
-// low level writing operations
+void Writer::closeFile()
+{
+    if (file.is_open())
+        file.close();
+    
+    // also clear any current error state
+    file.clear();
+} 
+
+void Writer::flush()
+{
+    // reset the values
+    uncompSize = 0;
+    compSize = 0;
+    cdrOffset = 0;
+
+    // clear the entries
+    entryList.clear();
+}
+
+// writing operations
 int Writer::writeHeader()
 {
-    WriteLE32(file, FILE_SIG);
-    WriteLE16(file, ZPACK_VERSION_REQUIRED);
+    writeLE32(file, FILE_SIG);
+    writeLE16(file, ZPACK_REVISION);
     if (!file) return ERROR_WRITE_FAIL;
     return OK;
 }
 
-int Writer::writeFile(std::string filename, std::istream* inputFile, int compressionLevel)
+int Writer::writeFile(const std::string& filename, const char* src, size_t srcSize, int compressionLevel)
 {
-    // cast all of the void* stuff into their actual type
-    auto zcs = static_cast<ZSTD_CStream*>(cStream);
-    auto inBuf = static_cast<ZSTD_inBuffer*>(inBuffer);
-    auto outBuf = static_cast<ZSTD_outBuffer*>(outBuffer);
+    // filename checks
+    if (filename.length() > UINT16_MAX)
+        return ERROR_FILENAME_TOO_LONG;
+    if (illegalFilename(filename))
+        return ERROR_ILLEGAL_FILENAME;
 
     // set the compression level
-    ZSTD_CCtx_setParameter(zcs, ZSTD_c_compressionLevel, compressionLevel);
+    ZSTD_CCtx_setParameter(cCtx, ZSTD_c_compressionLevel, compressionLevel);
 
     // create the file info
-    FileInfo* fileInfo = new FileInfo();
-    fileInfo->filename = filename;
+    FileInfo fileInfo;
+    fileInfo.filename = filename;
+
+    // add uncomp size
+    uncompSize += srcSize;
+    fileInfo.uncompSize = srcSize;
+    // set the file offset
+    fileInfo.fileOffset = file.tellp();
+
+    // and compress the file
+    size_t dstSize = ZSTD_compressBound(srcSize);
+    char* dst = new char[dstSize];
+
+    size_t compressedSize = ZSTD_compress2(cCtx, dst, dstSize, src, srcSize);
+    if (ZSTD_isError(compressedSize))
+    {
+        delete[] dst;
+        return ERROR_COMPRESS_FAIL;
+    }
+
+    // write the compressed data
+    file.write(dst, dstSize);
+    delete[] dst;
+    if (!file) return ERROR_WRITE_FAIL;
+    
+    // calculate the hash
+    CRC32 crc;
+    crc.add(src, srcSize);
+    fileInfo.crc = crc.digest();
+    fileInfo.compSize = compressedSize;
+    compSize += compressedSize;
+
+    // add file to the entry list
+    entryList.push_back(fileInfo);
+
+    return OK;
+}
+
+int Writer::writeFile(const std::string& filename, std::istream* inputFile, int compressionLevel)
+{
+    // seek to the end to get file size
+    inputFile->seekg(0, inputFile->end);
+    uint64_t srcSize = inputFile->tellg();
+    inputFile->seekg(0, inputFile->beg);
+
+    // load the entire file into memory
+    char* src = new char[srcSize];
+    inputFile->read(src, srcSize);
+    if (!inputFile) return ERROR_READ_FAIL;
+
+    int ret = writeFile(filename, src, srcSize, compressionLevel);
+    delete[] src;
+    return ret;
+}
+
+int Writer::writeFile(const std::string& filename, const std::string& inputFile, int compressionLevel)
+{
+    ifstream fileStream(inputFile);
+    return writeFile(filename, &fileStream, compressionLevel);
+}
+
+int Writer::writeFileStream(const std::string& filename, std::istream* inputFile, int compressionLevel)
+{
+    // filename checks
+    if (filename.length() > UINT16_MAX)
+        return ERROR_FILENAME_TOO_LONG;
+    if (illegalFilename(filename))
+        return ERROR_ILLEGAL_FILENAME;
+
+    // set the compression level
+    ZSTD_CCtx_setParameter(cCtx, ZSTD_c_compressionLevel, compressionLevel);
+
+    // create the file info
+    FileInfo fileInfo;
+    fileInfo.filename = filename;
 
     // seek to the end to get file size
     inputFile->seekg(0, inputFile->end);
@@ -84,28 +177,28 @@ int Writer::writeFile(std::string filename, std::istream* inputFile, int compres
     inputFile->seekg(0, inputFile->beg);
     // add uncomp size
     uncompSize += fileSize;
-    fileInfo->uncompSize = fileSize;
+    fileInfo.uncompSize = fileSize;
 
     // file processing section
-    fileInfo->fileOffset = file.tellp();
+    fileInfo.fileOffset = file.tellp();
     CRC32 crc;
     int compressedSize = 0;
 
-    char* charInBuf = (char*)inBuf->src;
-    char* charOutBuf = (char*)outBuf->dst;
+    char* charInBuf = (char*)inBuffer->src;
+    char* charOutBuf = (char*)outBuffer->dst;
     const size_t toRead = ZSTD_CStreamInSize();
 
     // file reading loop
     for (;;)
     {
         // reset both buffers' pos to 0
-        inBuf->pos = 0;
-        outBuf->pos = 0;
+        inBuffer->pos = 0;
+        outBuffer->pos = 0;
 
         // read the file into the buffer and change the size accordingly
         inputFile->read(charInBuf, toRead);
         size_t readSize = inputFile->gcount();
-        inBuf->size = readSize;
+        inBuffer->size = readSize;
 
         // calculate crc
         crc.add(charInBuf, readSize);
@@ -114,18 +207,19 @@ int Writer::writeFile(std::string filename, std::istream* inputFile, int compres
         ZSTD_EndDirective mode = inputFile->eof() ? ZSTD_e_end : ZSTD_e_continue;
         bool finished;
         do {
-            size_t remaining = ZSTD_compressStream2(zcs, outBuf, inBuf, mode);
+            size_t remaining = ZSTD_compressStream2(cCtx, outBuffer, inBuffer, mode);
             if (ZSTD_isError(remaining))
                 return ERROR_COMPRESS_FAIL;
 
-            file.write(charOutBuf, outBuf->pos);
-            compressedSize += outBuf->pos;
+            file.write(charOutBuf, outBuffer->pos);
+            if (!file) return ERROR_WRITE_FAIL;
+            compressedSize += outBuffer->pos;
             // From examples/streaming_compression.c
             /* If we're on the last chunk we're finished when zstd returns 0,
              * which means its consumed all the input AND finished the frame.
              * Otherwise, we're finished when we've consumed all the input.
              */
-            finished = inputFile->eof() ? (remaining == 0) : (inBuf->pos == inBuf->size);
+            finished = inputFile->eof() ? (remaining == 0) : (inBuffer->pos == inBuffer->size);
         } while (!finished);
 
         if (inputFile->eof())
@@ -134,18 +228,17 @@ int Writer::writeFile(std::string filename, std::istream* inputFile, int compres
         }
     }
     
-    fileInfo->crc = crc.digest();
-    fileInfo->compSize = compressedSize;
+    fileInfo.crc = crc.digest();
+    fileInfo.compSize = compressedSize;
     compSize += compressedSize;
 
     // add file to the entry list
     entryList.push_back(fileInfo);
 
-    if (!file) return ERROR_WRITE_FAIL;
     return OK;
 }
 
-int Writer::writeFile(std::string filename, std::string inputFile, int compressionLevel)
+int Writer::writeFileStream(const std::string& filename, const std::string& inputFile, int compressionLevel)
 {
     ifstream fileStream(inputFile);
     return writeFile(filename, &fileStream, compressionLevel);
@@ -154,18 +247,14 @@ int Writer::writeFile(std::string filename, std::string inputFile, int compressi
 int Writer::writeCDR()
 {
     cdrOffset = file.tellp();
-    WriteLE32(file, CDIR_SIG);
-    for (FileInfo *info: entryList) {
-        size_t filenameLen = info->filename.length();
-        if (filenameLen > UINT16_MAX)
-            return ERROR_FILENAME_TOO_LONG;
-
-        WriteLE16(file, filenameLen);
-        file << info->filename;
-        WriteLE64(file, info->fileOffset);
-        WriteLE64(file, info->compSize);
-        WriteLE64(file, info->uncompSize);
-        WriteLE32(file, info->crc);
+    writeLE32(file, CDIR_SIG);
+    for (FileInfo info: entryList) {
+        writeLE16(file, info.filename.length());
+        file << info.filename;
+        writeLE64(file, info.fileOffset);
+        writeLE64(file, info.compSize);
+        writeLE64(file, info.uncompSize);
+        writeLE32(file, info.crc);
     }
     if (!file) return ERROR_WRITE_FAIL;
     return OK;
@@ -173,8 +262,8 @@ int Writer::writeCDR()
 
 int Writer::writeEOCDR()
 {
-    WriteLE32(file, EOCDR_SIG);
-    WriteLE64(file, cdrOffset);
+    writeLE32(file, EOCDR_SIG);
+    writeLE64(file, cdrOffset);
     if (!file) return ERROR_WRITE_FAIL;
     return OK;
 }

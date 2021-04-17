@@ -21,43 +21,58 @@ using std::ifstream;
 
 // constructors
 Reader::Reader()
-: dStream(static_cast<void*>(ZSTD_createDStream())),
-  inBuffer(static_cast<void*>(new ZSTD_inBuffer())),
-  outBuffer(static_cast<void*>(new ZSTD_outBuffer()))
+: dCtx(ZSTD_createDStream()),
+  inBuffer(new ZSTD_inBuffer()),
+  outBuffer(new ZSTD_outBuffer())
 {
-    auto inBuf = static_cast<ZSTD_inBuffer*>(inBuffer);
-    auto outBuf = static_cast<ZSTD_outBuffer*>(outBuffer);
     // create the in buffer
-    inBuf->size = ZSTD_DStreamInSize();
-    inBuf->src = new char[inBuf->size];
+    inBuffer->size = ZSTD_DStreamInSize();
+    inBuffer->src = new char[inBuffer->size];
     // create the out buffer
-    outBuf->size = ZSTD_DStreamOutSize();
-    outBuf->dst = new char[outBuf->size];
+    outBuffer->size = ZSTD_DStreamOutSize();
+    outBuffer->dst = new char[outBuffer->size];
 }
 
-Reader::Reader(std::string filename)
+Reader::Reader(const std::string& filename)
 : Reader()
 {
     openFile(filename);
 }
 
-// destructors
+// destructor
 Reader::~Reader()
 {
-    ZSTD_freeDStream(static_cast<ZSTD_DStream*>(dStream));
-    delete static_cast<ZSTD_inBuffer*>(inBuffer);
-    delete static_cast<ZSTD_outBuffer*>(outBuffer);
+    ZSTD_freeDStream(dCtx);
+    delete inBuffer;
+    delete outBuffer;
 }
 
 // io stuff
-int Reader::openFile(std::string filename)
+int Reader::openFile(const std::string& filename)
 {
+    if (file.is_open())
+        closeFile();
+
     file.open(filename, ios::binary);
     if (!file.is_open())
         return ERROR_READ_FAIL;
 
     // read the file
     return readFile();
+}
+
+void Reader::closeFile()
+{
+    if (file.is_open())
+        file.close();
+
+    // also clear the state
+    file.clear();
+
+    // reset values
+    uncompSize = 0;
+    compSize = 0;
+    entryList.clear();
 }
 
 int Reader::readFile()
@@ -80,7 +95,7 @@ int Reader::readFile()
         return ret;
 
     // check the version
-    if (reqVersion > ZPACK_VERSION_INT)
+    if (reqVersion > ZPACK_REVISION)
         return ERROR_VERSION_INSUFFICIENT;
 
     // read and verify the eocdr
@@ -97,10 +112,10 @@ int Reader::readFile()
 }
 
 // file reader utils
-bool InvalidSig(ifstream &file, uint32_t sig)
+bool invalidSig(ifstream &file, uint32_t sig)
 {
     uint32_t fileSig = 0;
-    ReadLE32(file, fileSig);
+    readLE32(file, fileSig);
     return fileSig != sig;
 }
 
@@ -109,11 +124,11 @@ int Reader::readHeader(uint16_t &reqVersion)
 {
     file.seekg(0, file.beg);
     // verify the file's signature
-    if (InvalidSig(file, FILE_SIG))
+    if (invalidSig(file, FILE_SIG))
         return ERROR_INVALID_SIGNATURE;
 
     // read the required version
-    ReadLE16(file, reqVersion);
+    readLE16(file, reqVersion);
 
     // all good
     return OK;
@@ -123,11 +138,11 @@ int Reader::readEOCDR(uint64_t &cdrOffset)
 {
     // verify the eocdr's signature
     file.seekg(-12, file.end);
-    if (InvalidSig(file, EOCDR_SIG))
+    if (invalidSig(file, EOCDR_SIG))
         return ERROR_INVALID_SIGNATURE;
 
     // get the central directory offset
-    ReadLE64(file, cdrOffset);
+    readLE64(file, cdrOffset);
 
     // all good
     return OK;
@@ -137,11 +152,11 @@ int Reader::readCDR(uint64_t cdrOffset, EntryList &entryList)
 {
     // verify the cdr's signature
     file.seekg(cdrOffset, file.beg);
-    if (InvalidSig(file, CDIR_SIG))
+    if (invalidSig(file, CDIR_SIG))
         return ERROR_INVALID_SIGNATURE;
 
     // loop through the file records until the eocdr is reached
-    while (InvalidSig(file, EOCDR_SIG))
+    while (invalidSig(file, EOCDR_SIG))
     {
         if (file.eof())
         {
@@ -151,46 +166,98 @@ int Reader::readCDR(uint64_t cdrOffset, EntryList &entryList)
         // seek back 4 characters because signature check already moved the read pos
         file.seekg(-4, file.cur);
 
-        FileInfo *entry = new FileInfo();
+        FileInfo entry;
 
         // read the filename length
         uint16_t filenameLen = 0;
-        ReadLE16(file, filenameLen);
+        readLE16(file, filenameLen);
 
         // read the filename
         char *filename = new char[filenameLen];
         file.read(filename, filenameLen);
-        entry->filename.assign(filename, filenameLen);
+        entry.filename.assign(filename, filenameLen);
+        if (illegalFilename(entry.filename))
+            return ERROR_ILLEGAL_FILENAME;
 
         // read the entries
-        ReadLE64(file, entry->fileOffset);
-        ReadLE64(file, entry->compSize);
-        ReadLE64(file, entry->uncompSize);
-        ReadLE32(file, entry->crc);
+        readLE64(file, entry.fileOffset);
+        readLE64(file, entry.compSize);
+        readLE64(file, entry.uncompSize);
+        readLE32(file, entry.crc);
 
         // add the new file entry
         entryList.push_back(entry);
 
         // add the uncomp size/comp size
-        uncompSize += entry->uncompSize;
-        compSize += entry->compSize;
+        uncompSize += entry.uncompSize;
+        compSize += entry.compSize;
     }
 
     return OK;
 }
 
-int Reader::unpackFile(FileInfo *info, std::ostream &dst)
+int Reader::unpackFile(const FileInfo *info, std::ostream &dst)
 {
-    // cast all of the void* stuff into their actual type
-    auto zds = static_cast<ZSTD_DStream*>(dStream);
-    auto inBuf = static_cast<ZSTD_inBuffer*>(inBuffer);
-    auto outBuf = static_cast<ZSTD_outBuffer*>(outBuffer);
+    char* buffer = new char[info->uncompSize];
+    int ret;
+    if ((ret = unpackFile(info, buffer, info->uncompSize)) != OK)
+        return ret;
+    
+    dst.write(buffer, info->uncompSize);
+    delete[] buffer;
+
+    if (!dst)
+        return ERROR_DECOMPRESS_FAIL;
+
+    return OK;
+}
+
+int Reader::unpackFile(const FileInfo *info, char *dst, size_t dstCapacity)
+{
+    // check if dst is too small
+    if (dstCapacity < info->uncompSize)
+        return ERROR_DST_TOO_SMALL;
+    
+    CRC32 crc;
+    char* src = new char[info->compSize];
 
     // seek to the file
     file.seekg(info->fileOffset, file.beg);
+    // and read the whole thing in
+    file.read(src, info->compSize);
+
+    // decompress the file
+    size_t size = ZSTD_decompressDCtx(dCtx, dst, dstCapacity, src, info->compSize);
+    delete[] src;
+    if (ZSTD_isError(size))
+        return ERROR_DECOMPRESS_FAIL;
+
+    // verify crc
+    crc.add(dst, size);
+    if (info->crc != crc.digest())
+        return ERROR_CHECKSUM_MISMATCH;
+
+    // all good
+    return OK;
+}
+
+int Reader::unpackFile(const std::string& filename, std::ostream &dst)
+{
+    return unpackFile(getFileInfo(filename), dst);
+}
+
+int Reader::unpackFile(const std::string& filename, char *dst, size_t dstCapacity)
+{
+    return unpackFile(getFileInfo(filename), dst, dstCapacity);
+}
+
+int Reader::unpackFileStream(const FileInfo *info, std::ostream &dst)
+{
+    // seek to the file
+    file.seekg(info->fileOffset, file.beg);
     
-    char* charInBuf = (char*)inBuf->src;
-    char* charOutBuf = (char*)outBuf->dst;
+    char* charInBuf = (char*)inBuffer->src;
+    char* charOutBuf = (char*)outBuffer->dst;
     size_t toRead = std::min(info->compSize, ZSTD_DStreamInSize());
     size_t lastRet = 0;
     size_t totalRead = 0;
@@ -200,8 +267,8 @@ int Reader::unpackFile(FileInfo *info, std::ostream &dst)
     while (totalRead < info->compSize)
     {
         // reset both buffers' pos to 0
-        inBuf->pos = 0;
-        outBuf->pos = 0;
+        inBuffer->pos = 0;
+        outBuffer->pos = 0;
 
         // reduce reading size if needed
         toRead = std::min(toRead, info->compSize - totalRead);
@@ -212,22 +279,23 @@ int Reader::unpackFile(FileInfo *info, std::ostream &dst)
         if (read < toRead) 
             return ERROR_READ_FAIL;
         
-        inBuf->size = read;
+        inBuffer->size = read;
         totalRead += read;
 
         // frame decompression loop
-        while (inBuf->pos < inBuf->size)
+        while (inBuffer->pos < inBuffer->size)
         {
-            // reset outbuf pos to 0
-            outBuf->pos = 0;
+            // reset outBuffer pos to 0
+            outBuffer->pos = 0;
 
-            size_t ret = ZSTD_decompressStream(zds, outBuf, inBuf);
+            size_t ret = ZSTD_decompressStream(dCtx, outBuffer, inBuffer);
             if (ZSTD_isError(ret))
                 return ERROR_DECOMPRESS_FAIL;
             // calculate crc
-            crc.add(charOutBuf, outBuf->pos);
+            crc.add(charOutBuf, outBuffer->pos);
             // write to dst
-            dst.write(charOutBuf, outBuf->pos);
+            dst.write(charOutBuf, outBuffer->pos);
+            if (!dst) return ERROR_DECOMPRESS_FAIL;
             lastRet = ret;
         }
     }
@@ -249,7 +317,7 @@ int Reader::unpackFile(FileInfo *info, std::ostream &dst)
     return OK;
 }
 
-int Reader::unpackFile(FileInfo *info, char *dst, size_t dstCapacity)
+int Reader::unpackFileStream(const FileInfo *info, char *dst, size_t dstCapacity)
 {
     // check if dst is too small
     if (dstCapacity < info->uncompSize)
@@ -257,52 +325,51 @@ int Reader::unpackFile(FileInfo *info, char *dst, size_t dstCapacity)
 
     std::stringstream stream;
     stream.rdbuf()->pubsetbuf(dst, dstCapacity);
-    unpackFile(info, stream);
+    unpackFileStream(info, stream);
     stream.rdbuf()->pubsetbuf(nullptr, 0);
 
     return OK;
 }
 
-int Reader::unpackFile(std::string filename, std::ostream &dst)
+int Reader::unpackFileStream(const std::string& filename, std::ostream &dst)
 {
-    return unpackFile(getFileInfo(filename), dst);
+    return unpackFileStream(getFileInfo(filename), dst);
 }
 
-int Reader::unpackFile(std::string filename, char *dst, size_t dstCapacity)
+int Reader::unpackFileStream(const std::string& filename, char *dst, size_t dstCapacity)
 {
-    return unpackFile(getFileInfo(filename), dst, dstCapacity);
+    return unpackFileStream(getFileInfo(filename), dst, dstCapacity);
 }
 
 // getters
-FileInfo* Reader::getFileInfo(std::string filename)
+const FileInfo* Reader::getFileInfo(const std::string& filename)
 {
     for (int i = 0; i < entryList.size(); ++i)
     {
-        auto entry = entryList[i];
-        if (entry->filename == filename)
-            return entry;
+        if (entryList[i].filename == filename)
+            return &entryList[i];
     }
     return nullptr;
 }
 
-bool Reader::contains(std::string filename)
+bool Reader::contains(const std::string& filename)
 {
     for (int i = 0; i < entryList.size(); ++i)
     {
-        if (entryList[i]->filename == filename)
+        if (entryList[i].filename == filename)
             return true;
     }
     return false;
 }
 
-uint64_t Reader::getFileUncompSize(std::string filename)
+uint64_t Reader::getFileUncompSize(const std::string& filename)
 {
-    FileInfo* fileInfo = getFileInfo(filename);
+    auto fileInfo = getFileInfo(filename);
     return fileInfo != nullptr ? fileInfo->uncompSize : 0;
 }
 
-uint64_t Reader::getFileCompSize(std::string filename)
+uint64_t Reader::getFileCompSize(const std::string& filename)
 {
-    FileInfo* fileInfo = getFileInfo(filename);
+    auto fileInfo = getFileInfo(filename);
     return fileInfo != nullptr ? fileInfo->compSize : 0;
 }
