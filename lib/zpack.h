@@ -58,7 +58,7 @@ namespace ZPack
      * @param error The error code.
      * @return The error message corresponding to the error code.
      */
-    const char* getErrorMessage(int error);
+    ZPACK_API const char* getErrorMessage(int error);
 
     // structs
 

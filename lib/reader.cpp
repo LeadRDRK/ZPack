@@ -258,7 +258,7 @@ int Reader::unpackFileStream(const FileInfo *info, std::ostream &dst)
     
     char* charInBuf = (char*)inBuffer->src;
     char* charOutBuf = (char*)outBuffer->dst;
-    size_t toRead = std::min(info->compSize, ZSTD_DStreamInSize());
+    size_t toRead = std::min(info->compSize, (uint64_t)ZSTD_DStreamInSize());
     size_t lastRet = 0;
     size_t totalRead = 0;
     CRC32 crc;
@@ -271,7 +271,7 @@ int Reader::unpackFileStream(const FileInfo *info, std::ostream &dst)
         outBuffer->pos = 0;
 
         // reduce reading size if needed
-        toRead = std::min(toRead, info->compSize - totalRead);
+        toRead = std::min(toRead, (size_t)(info->compSize - totalRead));
 
         // read part of the file
         file.read(charInBuf, toRead);
