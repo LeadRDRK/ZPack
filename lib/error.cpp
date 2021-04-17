@@ -6,7 +6,6 @@
 */
 
 #include "zpack.h"
-using namespace ZPack;
 
 const char* ZPack::getErrorMessage(int error)
 {
