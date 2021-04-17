@@ -50,7 +50,7 @@ CRC32::CRC32()
 : crc(~0U)
 {}
 
-void CRC32::add(char *buf, size_t size)
+void CRC32::add(const char *buf, size_t size)
 {
     const uint8_t *p = (const uint8_t *)buf;
 

@@ -6,7 +6,7 @@ class CRC32
 {
     public:
         CRC32();
-        void add(char* buf, size_t size);
+        void add(const char* buf, size_t size);
         uint32_t digest();
 
     private:

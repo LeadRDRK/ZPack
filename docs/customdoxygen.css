@@ -1,0 +1,237 @@
+body {
+    background: black;
+    color: #eee;
+}
+
+body, table, div, p, dl {
+    font: 400 14px/22px BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+p.reference, p.definition {
+    font: 400 14px/22px BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@100&display=swap');
+
+#titlearea {
+    display: none;
+}
+
+.title {
+    font-size: 200%;
+}
+
+#top {
+    position: fixed;
+    width: 100%;
+}
+
+div.header, div.contents, address.footer, #main-menu, #nav-path ul {
+    padding-left: 3rem;
+    padding-right: 3rem;
+}
+
+div.header {
+    padding-top: 4.25rem;
+}
+
+address.footer small {
+    padding-right: 1rem;
+}
+
+.sm-dox {
+    background: #202d47;
+}
+
+#main-menu > li:first-child a {
+    color: #ddd !important;
+    font-size: 125%;
+}
+
+/* overrides to make mobile navbar the same as desktop */
+.sm-dox li {
+    border-top: 0;
+    float: left;
+}
+
+.sm-dox a {
+    padding: 0 12px;
+    background-image: none;
+}
+
+.sm-dox a.has-submenu {
+    padding-right: 24px;
+}
+
+.sm-dox a span.sub-arrow {
+    background: none;
+    top: 50%;
+    margin-top: -2px;
+    right: 12px;
+    width: 0;
+    height: 0;
+    border-width: 4px;
+    border-style: solid dashed dashed dashed;
+    border-color: #4d6fb3 transparent transparent transparent;
+    background: transparent;
+    -moz-border-radius: 0;
+    -webkit-border-radius: 0;
+    border-radius: 0;
+}
+/********************/
+
+.navpath ul {
+    background: none;
+    border: none;
+    background: #131b2b;
+}
+
+.tabsearch {
+    background: none;
+}
+
+div.header, h2.groupheader {
+    background: none;
+    border-bottom: 1px solid #5c616b;
+}
+
+.memSeparator {
+    border-bottom: 0;
+}
+
+.mdescLeft, .mdescRight,
+.memItemLeft, .memItemRight,
+.memTemplItemLeft, .memTemplItemRight, .memTemplParams {
+	background: none;
+}
+
+address, a, .navpath li, .navpath li.navelem a, h2.groupheader {
+    color: #5d85d4;
+    text-shadow: none;
+}
+
+a:visited {
+    color: #5d85d4 !important;
+}
+
+.mdescLeft, .mdescRight, .MSearchBoxActive #MSearchField, a.SelectItem {
+    color: #ccc;
+}
+
+#MSearchBox {
+    background: rgb(64, 64, 80);
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+    padding-top: 0.5rem;
+    padding-left: 0.25rem;
+    width: 11rem;
+}
+
+#MSearchField {
+    width: 7.5rem;
+}
+
+#main-menu > li:last-child {
+    margin-right: 0;
+    width: 11rem;
+}
+
+#MSearchSelectWindow {
+    background: #131b2b;
+}
+
+#MSearchResultsWindow {
+    margin-top: 1rem;
+    margin-left: 1.5rem;
+}
+
+.sm-dox ul a, .sm-dox ul a:focus, .sm-dox ul a:hover, .sm-dox ul a:active {
+    background-color: #131b2b
+}
+
+.sm-dox a, .sm-dox a:focus, .sm-dox a:hover, .sm-dox a:active {
+    color: #5d85d4;
+    text-shadow: none;
+}
+
+div.fragment {
+    background-color: #131b2b;
+    border: 1px solid #2b3e64;
+}
+
+span.comment, .paramname {
+    color: #fc4141;
+}
+
+span.stringliteral {
+    color: #5f82e9;
+}
+
+span.preprocessor {
+    color: #b88a2f;
+}
+
+span.keyword {
+    color: #00bd00;
+}
+
+span.keywordtype {
+    color: #be8042;
+}
+
+a.code, a.code:visited, a.line, a.line:visited {
+    color: #5d85d4;
+}
+
+span.lineno {
+    background-color: #202d47;
+}
+
+span.lineno a {
+    background-color: #162033;
+}
+
+.memdoc, dl.reflist dd {
+    background-color: #131b2b;
+}
+
+.memproto, dl.reflist dt {
+    background-color: #202d47;
+    color: #8fa6d4;
+    text-shadow: none;
+}
+
+.memtitle, .fieldtable th {
+    color: inherit;
+    background-color: #202d47;
+    background-image: none;
+}
+
+.directory tr.even {
+    background-color: #131b2b;
+}
+
+#nav-tree {
+    background-image: none;
+    background-color: #131b2b;
+}
+
+.navpath li.footer {
+    color: #5d85d4;
+}
+
+@media (min-width: 768px) {
+    #main-menu > li:last-child {
+        left: -1rem;
+    }
+
+    .sm-dox ul {
+        background: #131b2b;
+        border: 1px solid rgb(90, 90, 90);
+    }
+
+    .sm-dox ul a, .sm-dox ul a:hover, .sm-dox ul a:focus, .sm-dox ul a:active, .sm-dox ul a.highlighted {
+        color: #ccc;
+    }
+}
