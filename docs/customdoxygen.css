@@ -1,3 +1,5 @@
+/* Nocturnal Doxygen theme | (c) 2021 LeadRDRK | MIT License */
+
 body {
     background: black;
     color: #eee;
@@ -10,8 +12,6 @@ body, table, div, p, dl {
 p.reference, p.definition {
     font: 400 14px/22px BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@100&display=swap');
 
 #titlearea {
     display: none;
