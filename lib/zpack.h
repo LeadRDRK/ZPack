@@ -11,8 +11,8 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#define ZPACK_VERSION "1.0.0"
-#define ZPACK_REVISION 0
+#define ZPACK_VERSION "1.0.1"
+#define ZPACK_FILE_VERSION 0
 
 // forward declarations
 typedef struct ZSTD_DCtx_s ZSTD_DCtx;
@@ -119,7 +119,7 @@ namespace ZPack
         int openFile(const std::string& filename);
 
         /**
-         * Closes the archive and also resets the reader to its initial state.
+         * Closes the archive and resets the reader to its initial state.
          */
         void closeFile();
         
@@ -237,14 +237,25 @@ namespace ZPack
          * @param filename Name of the file.
          */
         uint64_t getFileCompSize(const std::string& filename);
-        
-        /**< Get the total uncompressed size of the archive's files. */
+
+        /**
+         * Get the total uncompressed size of the archive's files.
+         */
         inline uint64_t getUncompSize() { return uncompSize; };
-        /**< Get the total compressed size of the archive's files. */
+
+        /**
+         * Get the total compressed size of the archive's files.
+         */
         inline uint64_t getCompSize() { return compSize; };
-        /**< Get the underlying input file stream. */
+        
+        /**
+         * Get the underlying output file stream.
+         */
         inline std::ifstream& getFileStream() { return file; };
-        /**< Get the list of file entries. */
+
+        /**
+         * Get the list of file entries.
+         */
         inline EntryList getEntryList() { return entryList; };
 
     private:
@@ -310,14 +321,9 @@ namespace ZPack
         int openFile(const std::string& filename);
 
         /**
-         * Closes the archive.
+         * Closes the archive and resets the writer to its initial state.
          */
         void closeFile();
-
-        /**
-         * Erases all of the current file entries and resets the writer to its initial state.
-         */
-        void flush();
 
         // writing operations
 
@@ -385,13 +391,25 @@ namespace ZPack
         int writeEOCDR();
 
         // getters
-        /**< Get the total uncompressed size of the archive's files. */
+        
+        /**
+         * Get the total uncompressed size of the archive's files.
+         */
         inline uint64_t getUncompSize() { return uncompSize; };
-        /**< Get the total compressed size of the archive's files. */
+
+        /**
+         * Get the total compressed size of the archive's files.
+         */
         inline uint64_t getCompSize() { return compSize; };
-        /**< Get the underlying output file stream. */
+        
+        /**
+         * Get the underlying output file stream.
+         */
         inline std::ofstream& getFileStream() { return file; };
-        /**< Get the list of file entries. */
+
+        /**
+         * Get the list of file entries.
+         */
         inline EntryList getEntryList() { return entryList; };
 
     private:

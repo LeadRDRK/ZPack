@@ -1,6 +1,6 @@
                        ZPack
                 File Specifications
-                v1.0.0 (16/04/2021)
+               Version 0 (21/04/2021)
   Copyright (c) 2021 LeadRDRK. All rights reserved.
   Everyone is permitted to copy and distribute this
   document in any form. External modifications are
@@ -47,11 +47,6 @@ ZPack header
   -------------------------  -------  ------------
   signature                  4 bytes  ZPack header signature (0x5a504b15)
   archive version            2 bytes  The archive's version.
-  
-  Starting from version 1.0.0, the archive's version is
-  the revision number. For example, version 1.0.0 is 0,
-  but version 2.0.0 might be 21 if there has been 21 other
-  versions that came before it.
 
 File data
 ----------
