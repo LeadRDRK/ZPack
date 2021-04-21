@@ -95,7 +95,7 @@ int Reader::readFile()
         return ret;
 
     // check the version
-    if (reqVersion > ZPACK_REVISION)
+    if (reqVersion > ZPACK_FILE_VERSION)
         return ERROR_VERSION_INSUFFICIENT;
 
     // read and verify the eocdr
@@ -365,11 +365,11 @@ bool Reader::contains(const std::string& filename)
 uint64_t Reader::getFileUncompSize(const std::string& filename)
 {
     auto fileInfo = getFileInfo(filename);
-    return fileInfo != nullptr ? fileInfo->uncompSize : 0;
+    return fileInfo != nullptr ? fileInfo->uncompSize : -1;
 }
 
 uint64_t Reader::getFileCompSize(const std::string& filename)
 {
     auto fileInfo = getFileInfo(filename);
-    return fileInfo != nullptr ? fileInfo->compSize : 0;
+    return fileInfo != nullptr ? fileInfo->compSize : -1;
 }

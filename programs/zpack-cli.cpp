@@ -19,7 +19,7 @@ namespace fs = boost::filesystem;
 using namespace std::chrono;
 
 typedef std::vector<std::string> PathList;
-typedef std::vector<std::pair<std::string, std::ifstream *>> FileList;
+typedef std::vector<std::pair<std::string, std::string>> FileList;
 
 #define AUTHOR "LeadRDRK"
 #define PROGRAM_NAME "ZPack command line interface v" ZPACK_VERSION
@@ -131,17 +131,11 @@ void getDirFileList(const std::string &directory, FileList &fileList)
             prefix = rootPrefix;
 
         std::string filename = prefix + path.filename().string();
-        std::ifstream* file = new std::ifstream(path.string());
-        if (!file->is_open())
-        {
-            std::cerr << "FATAL: Failed to open " << path << "\n";
-            exit(1);
-        }
-        fileList.push_back({filename, file});
+        fileList.push_back({filename, path.string()});
     }
 }
 
-void parsePathList(PathList &pathList, FileList &fileList)
+void parsePathList(const PathList &pathList, FileList &fileList)
 {
     for (auto path: pathList)
     {
@@ -153,8 +147,7 @@ void parsePathList(PathList &pathList, FileList &fileList)
         else
         {
             std::string filename = getFilename(path);
-            std::ifstream *file = new std::ifstream(path);
-            fileList.push_back({filename, file});
+            fileList.push_back({filename, path});
         }
     }
 }
@@ -166,7 +159,7 @@ void handleCreateError(int ret, const std::string& filename)
     exit(1);
 }
 
-int createArchive(PathList &pathList, std::string &filename, int compressionLevel)
+int createArchive(const PathList &pathList, std::string &filename, int compressionLevel)
 {
     steady_clock::time_point startTime = steady_clock::now();
     if (pathList.size() < 1)
@@ -200,13 +193,19 @@ int createArchive(PathList &pathList, std::string &filename, int compressionLeve
     for (auto pair: fileList)
     {
         auto filename = pair.first;
-        auto inputFile = pair.second;
+        std::ifstream inputFile(pair.second);
         std::cout << " " << filename << std::endl;
-
-        if ((ret = zpkWriter.writeFileStream(filename, inputFile, compressionLevel)) != ZPack::OK)
+        
+        if (!inputFile.is_open())
+        {
+            std::cerr << "FATAL: Failed to open input file." << "\n";
+            exit(1);
+        }
+        
+        if ((ret = zpkWriter.writeFileStream(filename, &inputFile, compressionLevel)) != ZPack::OK)
             handleCreateError(ret, filename);
 
-        inputFile->close();
+        inputFile.close();
     }
     std::cout << "-- Writing CDR..." << std::endl;
     if ((ret = zpkWriter.writeCDR()) != ZPack::OK)

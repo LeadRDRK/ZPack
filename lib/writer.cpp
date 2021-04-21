@@ -61,10 +61,7 @@ void Writer::closeFile()
     
     // also clear any current error state
     file.clear();
-} 
 
-void Writer::flush()
-{
     // reset the values
     uncompSize = 0;
     compSize = 0;
@@ -78,7 +75,7 @@ void Writer::flush()
 int Writer::writeHeader()
 {
     writeLE32(file, FILE_SIG);
-    writeLE16(file, ZPACK_REVISION);
+    writeLE16(file, ZPACK_FILE_VERSION);
     if (!file) return ERROR_WRITE_FAIL;
     return OK;
 }
