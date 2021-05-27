@@ -5,7 +5,6 @@
     Check the LICENSE file for more information.
 */
 
-#include <boost/filesystem/operations.hpp>
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -192,9 +191,9 @@ int createArchive(const PathList &pathList, std::string &filename, int compressi
     std::cout << "-- Compressing files..." << std::endl;
     for (auto pair: fileList)
     {
-        auto filename = pair.first;
+        const std::string& entryName = pair.first;
         std::ifstream inputFile(pair.second);
-        std::cout << " " << filename << std::endl;
+        std::cout << " " << entryName << std::endl;
         
         if (!inputFile.is_open())
         {
@@ -202,8 +201,8 @@ int createArchive(const PathList &pathList, std::string &filename, int compressi
             exit(1);
         }
         
-        if ((ret = zpkWriter.writeFileStream(filename, &inputFile, compressionLevel)) != ZPack::OK)
-            handleCreateError(ret, filename);
+        if ((ret = zpkWriter.writeFileStream(entryName, &inputFile, compressionLevel)) != ZPack::OK)
+            handleCreateError(ret, entryName);
 
         inputFile.close();
     }
