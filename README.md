@@ -1,4 +1,6 @@
 # ZPack
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/LeadRDRK/ZPack.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/LeadRDRK/ZPack/alerts/)
+[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/LeadRDRK/ZPack.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/LeadRDRK/ZPack/context:cpp)
 ZPack is a simple, general-purpose archive file format with lossless data compression.
 
 Designed to be extremely fast, it exclusively uses the Zstandard compression algorithm for file compression (hence the name)
