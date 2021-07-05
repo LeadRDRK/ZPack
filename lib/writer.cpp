@@ -42,8 +42,10 @@ Writer::~Writer()
 {
     file.close();
     ZSTD_freeCStream(static_cast<ZSTD_CStream*>(cCtx));
-    delete static_cast<ZSTD_inBuffer*>(inBuffer);
-    delete static_cast<ZSTD_outBuffer*>(outBuffer);
+    delete[] reinterpret_cast<const char*>(inBuffer->src);
+    delete inBuffer;
+    delete[] reinterpret_cast<const char*>(outBuffer->dst);
+    delete outBuffer;
 }
 
 // io stuff

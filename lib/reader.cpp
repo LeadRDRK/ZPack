@@ -8,6 +8,7 @@
 #include "zpack.h"
 #include "zpack_utils.h"
 #include "zpack_crc.h"
+#include <algorithm>
 #include <cstdint>
 #include <sstream>
 #include <ostream>
@@ -43,7 +44,9 @@ Reader::Reader(const std::string& filename)
 Reader::~Reader()
 {
     ZSTD_freeDStream(dCtx);
+    delete[] reinterpret_cast<const char*>(inBuffer->src);
     delete inBuffer;
+    delete[] reinterpret_cast<const char*>(outBuffer->dst);
     delete outBuffer;
 }
 
@@ -176,6 +179,7 @@ int Reader::readCDR(uint64_t cdrOffset, EntryList &entryList)
         char *filename = new char[filenameLen];
         file.read(filename, filenameLen);
         entry.filename.assign(filename, filenameLen);
+        delete[] filename;
         if (illegalFilename(entry.filename))
             return ERROR_ILLEGAL_FILENAME;
 
