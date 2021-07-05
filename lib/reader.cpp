@@ -8,7 +8,6 @@
 #include "zpack.h"
 #include "zpack_utils.h"
 #include "zpack_crc.h"
-#include <algorithm>
 #include <cstdint>
 #include <sstream>
 #include <ostream>

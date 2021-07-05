@@ -41,7 +41,7 @@ Writer::Writer(const std::string& filename)
 Writer::~Writer()
 {
     file.close();
-    ZSTD_freeCStream(static_cast<ZSTD_CStream*>(cCtx));
+    ZSTD_freeCStream(cCtx);
     delete[] reinterpret_cast<const char*>(inBuffer->src);
     delete inBuffer;
     delete[] reinterpret_cast<const char*>(outBuffer->dst);
