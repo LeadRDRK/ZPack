@@ -343,16 +343,18 @@ enum {
 };
 
 static std::unordered_map<std::string, int> argMap = {
-    {"-c",       ARG_CREATE},
-    {"--create", ARG_CREATE},
-    {"-u",       ARG_UNPACK},
-    {"--unpack", ARG_UNPACK},
-    {"-o",       ARG_OUTPUT},
-    {"--output", ARG_OUTPUT},
-    {"-l",       ARG_LIST},
-    {"--list",   ARG_LIST},
-    {"-f",       ARG_FAST},
-    {"--fast",   ARG_FAST},
+    {"-c",        ARG_CREATE},
+    {"--create",  ARG_CREATE},
+    {"-u",        ARG_UNPACK},
+    {"--unpack",  ARG_UNPACK},
+    {"-o",        ARG_OUTPUT},
+    {"--output",  ARG_OUTPUT},
+    {"-l",        ARG_LIST},
+    {"--list",    ARG_LIST},
+    {"-f",        ARG_FAST},
+    {"--fast",    ARG_FAST},
+    {"-v",        ARG_VERSION},
+    {"--version", ARG_VERSION},
 };
 
 int main(int argc, char **argv)
@@ -410,7 +412,7 @@ int main(int argc, char **argv)
                 case ARG_VERSION:
                     std::cout <<
                         PROGRAM_NAME "\n"
-                        "Copyright (c) 2021 LeadRDRK. Licensed under the BSD 3-Clause license.\n";
+                        "Copyright (c) 2021 LeadRDRK. Licensed under the zlib license.\n";
                     return 0;
                 }
             }

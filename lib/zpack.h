@@ -11,7 +11,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#define ZPACK_VERSION "1.0.1"
+#define ZPACK_VERSION "1.0.2"
 #define ZPACK_FILE_VERSION 0
 
 // forward declarations
