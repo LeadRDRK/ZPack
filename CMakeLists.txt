@@ -11,6 +11,15 @@ option(ZPACK_USE_SYSTEM_ZSTD "Use the system's zstd library instead" OFF)
 option(ZPACK_USE_SYSTEM_XXHASH "Use the system's xxHash library instead" OFF)
 
 add_subdirectory(externals)
+
+# detect and enable large file support
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+include(TestLargeFiles)
+ZPACK_TEST_LARGE_FILES(ZPACK_LFS_SUPPORTED)
+if(ZPACK_LFS_SUPPORTED)
+    set(ZPACK_LFS_DEFS _FILE_OFFSET_BITS=64 _LARGE_FILES _LARGEFILE64_SOURCE)
+endif()
+
 add_subdirectory(lib)
 
 if(ZPACK_BUILD_PROGRAMS)

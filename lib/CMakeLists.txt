@@ -47,13 +47,6 @@ else()
     endif()
 endif()
 
-# detect and enable large file support
-include(TestLargeFiles)
-ZPACK_TEST_LARGE_FILES(ZPACK_LFS_SUPPORTED)
-if(ZPACK_LFS_SUPPORTED)
-    set(ZPACK_LFS_DEFS _FILE_OFFSET_BITS=64 _LARGE_FILES _LARGEFILE64_SOURCE)
-endif()
-
 add_library(zpack ${ZPACK_LIBRARY_TYPE}
     zpack_common.c
     zpack_read.c

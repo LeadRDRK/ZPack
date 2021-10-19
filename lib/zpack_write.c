@@ -14,7 +14,7 @@
 
 int zpack_init_writer(zpack_writer* writer, const char* path)
 {
-    writer->file = ZPACK_FOPEN(path, "w");
+    writer->file = ZPACK_FOPEN(path, "wb");
     if (!writer->file) return ZPACK_ERROR_OPEN_FAILED;
     return ZPACK_OK;
 }

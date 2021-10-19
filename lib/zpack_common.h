@@ -2,6 +2,7 @@
 #define __ZPACK_UTILS_H__
 
 #include "zpack.h"
+#include "zpack_export.h"
 #include <stdio.h>
 
 #define ZPACK_READ_LE8(p)  *((const zpack_u8 *)(p))
@@ -28,27 +29,17 @@ int zpack_seek_and_write(FILE* fp, size_t offset, const zpack_u8* buffer, size_t
 int zpack_get_heap_size(int n);
 int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 needed);
 
-// Platform specific file reading methods
+// Platform specific stuff
 
-// MSVC and Mingw-w64
-#if defined(_MSC_VER) || defined(__MINGW64__)
-FILE* zpack_fopen(const char* filename, const char* mode);
+// MSVC and Mingw
+#if defined(_MSC_VER) || defined(__MINGW32__)
+ZPACK_EXPORT FILE* zpack_fopen(const char* filename, const char* mode);
 #define ZPACK_FOPEN zpack_fopen
 #define ZPACK_FCLOSE fclose
 #define ZPACK_FREAD fread
 #define ZPACK_FWRITE fwrite
 #define ZPACK_FTELL _ftelli64
 #define ZPACK_FSEEK _fseeki64
-#define ZPACK_FFLUSH fflush
-
-// Mingw-w32
-#elif defined(__MINGW32__)
-#define ZPACK_FOPEN fopen
-#define ZPACK_FCLOSE fclose
-#define ZPACK_FREAD fread
-#define ZPACK_FWRITE fwrite
-#define ZPACK_FTELL ftello64
-#define ZPACK_FSEEK fseeko64
 #define ZPACK_FFLUSH fflush
 
 // GNU-compatible compilers with large file support enabled
