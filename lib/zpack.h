@@ -59,16 +59,6 @@ typedef struct zpack_file_entry_s
     
 } zpack_file_entry;
 
-typedef enum zpack_action_e
-{
-    // these enums are listed in order of processing
-    ZPACK_ACTION_REMOVE_FILE,
-    ZPACK_ACTION_WRITE_FILE,
-
-    ZPACK_ACTION_LAST_ENUM
-
-} zpack_action;
-
 typedef struct zpack_archive_s
 {
     zpack_u16 version;

@@ -1,7 +1,7 @@
 #include "zpack_common.h"
 #include <stdlib.h>
 
-#if defined(_MSC_VER) || defined(__MINGW64__)
+#if defined(_MSC_VER) || defined(__MINGW32__)
 
 FILE* zpack_fopen(const char* filename, const char* mode)
 {

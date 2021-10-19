@@ -1,11 +1,10 @@
 #include <zpack.h>
+#include <zpack_common.h>
 #include <stdlib.h>
 #include <string.h>
 #include "archive.h"
 
 #define OUT_FILE "out.zpk"
-
-
 
 int main()
 {
@@ -18,29 +17,29 @@ int main()
     {
         files[i].filename = _filenames[i];
 
-        fp = fopen(_filenames[i], "r");
-        if (fseek(fp, 0, SEEK_END) != 0)
+        fp = ZPACK_FOPEN(_filenames[i], "rb");
+        if (ZPACK_FSEEK(fp, 0, SEEK_END) != 0)
         {
             printf("Error while reading %s\n", _filenames[i]);
             return 1;
         }
         
-        files[i].size = ftell(fp);
+        files[i].size = ZPACK_FTELL(fp);
         files[i].buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * files[i].size);
-        if (fseek(fp, 0, SEEK_SET) != 0)
+        if (ZPACK_FSEEK(fp, 0, SEEK_SET) != 0)
         {
             printf("Error while reading %s\n", _filenames[i]);
             return 1;
         }
 
-        if (!fread(files[i].buffer, files[i].size, 1, fp))
+        if (!ZPACK_FREAD(files[i].buffer, files[i].size, 1, fp))
         {
             printf("Error while reading %s\n", _filenames[i]);
             return 1;
         }
 
         files[i].options = &options;
-        fclose(fp);
+        ZPACK_FCLOSE(fp);
     }
 
     zpack_writer writer;
@@ -48,7 +47,7 @@ int main()
 
     /**** Write to file ****/
     int ret;
-    printf("Writer to file\n");
+    printf("Write to file\n");
     if ((ret = zpack_init_writer(&writer, OUT_FILE)))
     {
         printf("-- Got error %d from zpack_init_writer\n", ret);
@@ -67,14 +66,14 @@ int main()
 
     // Verify archive
     zpack_u8 buffer[sizeof(_archive_buffer)];
-    fp = fopen(OUT_FILE, "r");
-    if (!fread(buffer, sizeof(_archive_buffer), 1, fp))
+    fp = ZPACK_FOPEN(OUT_FILE, "rb");
+    if (!ZPACK_FREAD(buffer, sizeof(_archive_buffer), 1, fp))
     {
         printf("-- Failed to read written archive\n");
         zpack_close_writer(&writer);
         return 1;
     }
-    fclose(fp);
+    ZPACK_FCLOSE(fp);
     if (memcmp(_archive_buffer, buffer, sizeof(_archive_buffer)) != 0)
     {
         printf("-- Written archive is invalid\n");
@@ -86,7 +85,7 @@ int main()
     printf("-- Archive write to " OUT_FILE " successful\n");
 
     /**** Write to buffer ****/
-    printf("Writer to buffer\n");
+    printf("Write to buffer\n");
     if ((ret = zpack_init_writer_heap(&writer, 0)))
     {
         printf("Got error %d from zpack_init_writer\n", ret);
