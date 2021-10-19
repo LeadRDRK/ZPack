@@ -1,430 +1,215 @@
-/*
-    zpack.h - ZPack library - Header
-    Copyright (c) 2021 LeadRDRK
-    Licensed under the BSD 3-Clause license.
-    Check the LICENSE file for more information.
-*/
+#ifndef __ZPACK_H__
+#define __ZPACK_H__
 
-#pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#include "zpack_common.h"
-#include <fstream>
-#include <string>
-#include <vector>
-#define ZPACK_VERSION "1.0.2"
-#define ZPACK_FILE_VERSION 0
+#include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "zpack_export.h"
 
-// forward declarations
+typedef uint8_t  zpack_u8;
+typedef uint16_t zpack_u16;
+typedef uint32_t zpack_u32;
+typedef uint64_t zpack_u64;
+
+typedef zpack_u8 zpack_bool;
+#define ZPACK_FALSE 0
+#define ZPACK_TRUE 1
+
+// file format details
+#define ZPACK_HEADER_SIGNATURE 0x154b505a // ZPK\x15
+#define ZPACK_DATA_SIGNATURE   0x144b505a // ZPK\x14
+#define ZPACK_CDR_SIGNATURE    0x134b505a // ZPK\x13
+#define ZPACK_EOCDR_SIGNATURE  0x124b505a // ZPK\x12
+
+#define ZPACK_SIGNATURE_SIZE 4
+#define ZPACK_HEADER_SIZE 6
+#define ZPACK_CDR_HEADER_SIZE 20
+#define ZPACK_FILE_ENTRY_FIXED_SIZE 35 // size of fixed fields in file entry
+#define ZPACK_EOCDR_SIZE 12
+
+// archive versions supported
+#define ZPACK_ARCHIVE_VERSION_MIN 1
+#define ZPACK_ARCHIVE_VERSION_MAX 1
+
+// forward decl
 typedef struct ZSTD_DCtx_s ZSTD_DCtx;
 typedef struct ZSTD_CCtx_s ZSTD_CCtx;
 typedef struct ZSTD_inBuffer_s ZSTD_inBuffer;
 typedef struct ZSTD_outBuffer_s ZSTD_outBuffer;
 
-/** @file */
-namespace ZPack
+typedef enum zpack_compression_method_e
 {
-    // stuff for internal usage
-    namespace Detail
-    {
-        // signatures
-        const uint32_t FILE_SIG = 0x084b505a; // ZPK\x08
-        const uint32_t CDIR_SIG = 0x074b505a; // ZPK\x07
-        const uint32_t EOCDR_SIG = 0x064b505a; // ZPK\x06
-    };
+    ZPACK_COMPRESSION_ZSTD,
+    ZPACK_COMPRESSION_LZ4
 
-    /**
-     * @brief Return codes.
-     */
-    enum ReturnCode
-    {
-        OK, /**< All good. */
-        ERROR_READ_FAIL, /**< The file couldn't be read. */
-        ERROR_FILE_TOO_SMALL, /**< The archive is too small. */
-        ERROR_INVALID_SIGNATURE, /**< The archive's signature is invalid. */
-        ERROR_INVALID_FILE_RECORD, /**< One of the file records is invalid. */
-        ERROR_VERSION_INSUFFICIENT, /**< The reader's version is too low to read the archive. */
-        ERROR_DECOMPRESS_FAIL, /**< Failed to decompress the file. */
-        ERROR_CHECKSUM_MISMATCH, /**< The decompressed file's checksum does not match the original checksum. */
-        ERROR_DST_TOO_SMALL, /**< The destination buffer is too small. */
-        ERROR_ILLEGAL_FILENAME, /**< One of the filenames contains an illegal path. */
-        ERROR_WRITE_FAIL, /**< The file couldn't be written. */
-        ERROR_COMPRESS_FAIL, /**< Failed to compress the file. */
-        ERROR_FILENAME_TOO_LONG /**< The filename is too long. */
-    };
+} zpack_compression_method;
 
-    /**
-     * Gets the error message for the specified error code. Returns a nullptr if the
-     * code is out of range.
-     * @param error The error code.
-     * @return The error message corresponding to the error code.
-     */
-    ZPACK_API const char* getErrorMessage(int error);
+typedef struct zpack_file_entry_s
+{
+    char*     filename;
+    zpack_u64 offset;
+    zpack_u64 comp_size;
+    zpack_u64 uncomp_size;
+    zpack_u64 hash;
+    zpack_u8  comp_method;
+    
+} zpack_file_entry;
 
-    // structs
+typedef enum zpack_action_e
+{
+    // these enums are listed in order of processing
+    ZPACK_ACTION_REMOVE_FILE,
+    ZPACK_ACTION_WRITE_FILE,
 
-    /**
-     * @brief Information about a file in an archive.
-     */
-    struct ZPACK_API FileInfo
-    { 
-        std::string filename; /**< Name of the file. */
-        uint64_t fileOffset = 0; /**< Offset of the compressed file in the archive. */
-        uint64_t compSize = 0; /**< Compressed size of the file. */
-        uint64_t uncompSize = 0; /**< Uncompressed size of the file. */
-        uint32_t crc = 0; /**< CRC32 digest of the uncompressed file. */
-    };
+    ZPACK_ACTION_LAST_ENUM
 
-    // types
-    typedef std::vector<FileInfo> EntryList;
+} zpack_action;
 
-    /**
-     * Usage example:
-     * ```
-     * // Open the archive
-     * ZPack::Reader reader("archive.zpk");
-     *
-     * // Unpack files
-     * std::ifstream file("file.txt");
-     * reader.unpackFile("path/to/file.txt", file);
-     * file.close();
-     *
-     * // Streaming API
-     * std::ifstream file2("file2.txt");
-     * reader.unpackFileStream("path/to/file2.txt", file2);
-     * file2.close();
-     *
-     * // Close the file
-     * reader.closeFile();
-     *
-     * ```
-     * The reader can be reused as many times as you want.
-     * @brief Archive reader
-     */
-    class ZPACK_API Reader
-    {
-    public:
-        // constructors
-        Reader();
-        Reader(const std::string& filename);
+typedef struct zpack_archive_s
+{
+    zpack_u16 version;
+    zpack_file_entry* file_entries;
+    zpack_u64 file_count;
+    zpack_u64 comp_size;
+    zpack_u64 uncomp_size;
+    size_t file_size;
 
-        // destructor
-        ~Reader();
+    // zstd
+    ZSTD_DCtx* zstd_dctx;
 
-        // io operations
+    size_t last_return; // last compression library return value
 
-        /**
-         * Open an archive for reading.
-         * @param filename Name of the file.
-         */
-        int openFile(const std::string& filename);
+    // offsets
+    zpack_u64 cdr_offset;
+    zpack_u64 eocdr_offset;
 
-        /**
-         * Closes the archive and resets the reader to its initial state.
-         */
-        void closeFile();
-        
-        // low level reading operations
+    zpack_u8* buffer;
+    zpack_bool buffer_shared;
+    FILE* file;
 
-        /**
-         * Read the header of an archive.
-         * @param reqVersion (Output) Required version to read the file.
-         */
-        int readHeader(uint16_t &reqVersion);
+} zpack_archive;
 
-        /**
-         * Read the end of central directory record of an archive.
-         * @param cdrOffset (Output) Offset of the central directory record in the archive.
-         */
-        int readEOCDR(uint64_t &cdrOffset);
+typedef struct zpack_compress_options_s
+{
+    zpack_compression_method method;
+    int level;
 
-        /**
-         * Read central directory record of an archive.
-         * @param cdrOffset Offset of the central directory record in the archive.
-         * @param entryList (Output) List of entries in the CDR.
-         */
-        int readCDR(uint64_t cdrOffset, EntryList &entryList);
+} zpack_compress_options;
 
-        // unpacking operations
+typedef struct zpack_file_s
+{
+    char*     filename;
+    zpack_u8* buffer;
+    zpack_u64 size;
+    zpack_compress_options* options;
 
-        /**
-         * Unpack a file into a stream.
-         * @param info Information about the file.
-         * @param dst The ostream to write to.
-         */
-        int unpackFile(const FileInfo *info, std::ostream &dst);
+} zpack_file;
 
-        /**
-         * Unpack a file into a buffer.
-         * @param info Information about the file.
-         * @param dst The char* buffer to write to.
-         * @param dstCapacity The size of the buffer.
-         */
-        int unpackFile(const FileInfo *info, char *dst, size_t dstCapacity);
+typedef struct zpack_writer_s
+{
+    zpack_u8* buffer;
+    zpack_u64 buffer_capacity;
+    FILE* file;
+    size_t file_size;
 
-        /**
-         * Unpack a file into a stream.
-         * @param filename Name of the file.
-         * @param dst The ostream to write to.
-         */
-        int unpackFile(const std::string& filename, std::ostream &dst);
+    size_t write_offset;
 
-        /**
-         * Unpack a file into a char* buffer.
-         * @param filename Name of the file.
-         * @param dst The char* buffer to write to.
-         * @param dstCapacity The size of the buffer.
-         */
-        int unpackFile(const std::string& filename, char *dst, size_t dstCapacity);
+    zpack_file_entry* file_entries;
+    zpack_u64 fe_capacity;
+    zpack_u64 file_count;
 
-        /**
-         * Unpack a file into a stream.\n
-         * This is the streaming variant which uses ZSTD's streaming API.
-         * @param info Information about the file.
-         * @param dst The ostream to write to.
-         */
-        int unpackFileStream(const FileInfo *info, std::ostream &dst);
+    // zstd
+    ZSTD_CCtx* zstd_cctx;
 
-        /**
-         * Unpack a file into a buffer.\n
-         * This is the streaming variant which uses ZSTD's streaming API.
-         * @param info Information about the file.
-         * @param dst The char* buffer to write to.
-         * @param dstCapacity The size of the buffer.
-         */
-        int unpackFileStream(const FileInfo *info, char *dst, size_t dstCapacity);
+    size_t last_return; // last compression library return value
 
-        /**
-         * Unpack a file into a stream.\n
-         * This is the streaming variant which uses ZSTD's streaming API.
-         * @param filename Name of the file.
-         * @param dst The ostream to write to.
-         */
-        int unpackFileStream(const std::string& filename, std::ostream &dst);
+    // offsets
+    zpack_u64 cdr_offset;
+    zpack_u64 eocdr_offset;
 
-        /**
-         * Unpack a file into a char* buffer.\n
-         * This is the streaming variant which uses ZSTD's streaming API.
-         * @param filename Name of the file.
-         * @param dst The char* buffer to write to.
-         * @param dstCapacity The size of the buffer.
-         */
-        int unpackFileStream(const std::string& filename, char *dst, size_t dstCapacity);
+} zpack_writer;
 
-        // getters
+typedef struct zpack_streaming_state_s
+{
+    ZSTD_inBuffer* zstd_in_buffer;
+    ZSTD_outBuffer* zstd_out_buffer;
 
-        /**
-         * Get a file's information.
-         * @param filename Name of the file.
-         */
-        const FileInfo* getFileInfo(const std::string& filename);
+} zpack_streaming_state;
 
-        /**
-         * Check if the archive contains a file.
-         * @param filename Name of the file.
-         */
-        bool contains(const std::string& filename);
+enum zpack_result
+{
+    ZPACK_OK,                         // No errors
+    ZPACK_DONE,                       // (Streaming) decompression is done
 
-        /**
-         * Get the file's uncompressed size. Shorthand for GetFileInfo(filename)->uncompSize.
-         * Returns 0 if the file does not exist.
-         * @param filename Name of the file.
-         */
-        uint64_t getFileUncompSize(const std::string& filename);
+    ZPACK_ERROR_ARCHIVE_NOT_LOADED,   // Archive has not been loaded
+    ZPACK_ERROR_WRITER_NOT_OPENED,    // Writer has not been opened
+    ZPACK_ERROR_OPEN_FAILED,          // Failed to open file
+    ZPACK_ERROR_SEEK_FAILED,          // Failed to seek file
+    ZPACK_ERROR_SIGNATURE_INVALID,    // Invalid archive signature
+    ZPACK_ERROR_READ_FAILED,          // An archive section is invalid
+    ZPACK_ERROR_BLOCK_SIZE_INVALID,   // Invalid block size
+    ZPACK_ERROR_VERSION_INCOMPATIBLE, // Archive version is not supported
+    ZPACK_ERROR_OUT_OF_MEMORY,        // Could not allocate enough memory
+    ZPACK_ERROR_FILE_NOT_FOUND,       // Could not find file in archive
+    ZPACK_ERROR_BUFFER_TOO_SMALL,     // Buffer size is too small
+    ZPACK_ERROR_DECOMPRESS_FAILED,    // Decompression error (check last_return for the compression library's error code)
+    ZPACK_ERROR_COMPRESS_FAILED,      // Compression error (check last_return for the compression library's error code)
+    ZPACK_ERROR_FILE_HASH_MISMATCH,   // The decompressed file's hash does not match the original file's hash
+    ZPACK_ERROR_COMP_METHOD_INVALID,  // Invalid compression method
+    ZPACK_ERROR_FILE_OFFSET_INVALID,  // File offset invalid
+    ZPACK_ERROR_WRITE_FAILED          // Failed to write data to file
 
-        /**
-         * Get the file's compressed size. Shorthand for GetFileInfo(filename)->compSize.
-         * Returns 0 if the file does not exist.
-         * @param filename Name of the file.
-         */
-        uint64_t getFileCompSize(const std::string& filename);
+};
 
-        /**
-         * Get the total uncompressed size of the archive's files.
-         */
-        inline uint64_t getUncompSize() { return uncompSize; };
+// Reading
+ZPACK_EXPORT int zpack_read_header_memory(const zpack_u8* buffer, zpack_u16* version);
+ZPACK_EXPORT int zpack_read_header(FILE* fp, zpack_u16* version);
+ZPACK_EXPORT int zpack_read_data_header_memory(const zpack_u8* buffer);
+ZPACK_EXPORT int zpack_read_data_header(FILE* fp);
+ZPACK_EXPORT int zpack_read_eocdr_memory(const zpack_u8* buffer, zpack_u64* cdr_offset);
+ZPACK_EXPORT int zpack_read_eocdr(FILE* fp, zpack_u64 eocdr_offset, zpack_u64* cdr_offset);
+ZPACK_EXPORT int zpack_read_cdr_header_memory(const zpack_u8* buffer, zpack_u64* count, zpack_u64* block_size);
+ZPACK_EXPORT int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_file_entry* entry, size_t* entry_size);
+ZPACK_EXPORT int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 count, zpack_u64 block_size, zpack_u64* total_cs, zpack_u64* total_us);
+ZPACK_EXPORT int zpack_read_cdr_memory(const zpack_u8* buffer, size_t size_left, zpack_file_entry** entries, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
+ZPACK_EXPORT int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
+ZPACK_EXPORT int zpack_read_archive_memory(zpack_archive* archive);
+ZPACK_EXPORT int zpack_read_archive(zpack_archive* archive);
 
-        /**
-         * Get the total compressed size of the archive's files.
-         */
-        inline uint64_t getCompSize() { return compSize; };
-        
-        /**
-         * Get the underlying output file stream.
-         */
-        inline std::ifstream& getFileStream() { return file; };
+ZPACK_EXPORT int zpack_archive_read_raw_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
+ZPACK_EXPORT int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
+ZPACK_EXPORT int zpack_archive_read_file_stream(zpack_archive* archive, zpack_file_entry* entry, zpack_streaming_state* state);
 
-        /**
-         * Get the list of file entries.
-         */
-        inline EntryList getEntryList() { return entryList; };
+ZPACK_EXPORT int zpack_archive_get_file_entry(zpack_archive* archive, const char* filename, zpack_file_entry** entry);
 
-    private:
-        int readFile();
+ZPACK_EXPORT int zpack_open_archive_memory(zpack_archive* archive, const zpack_u8* buffer, size_t size);
+ZPACK_EXPORT int zpack_open_archive_memory_shared(zpack_archive* archive, zpack_u8* buffer, size_t size);
+ZPACK_EXPORT int zpack_open_archive(zpack_archive* archive, const char* path);
+ZPACK_EXPORT void zpack_close_archive(zpack_archive* archive);
 
-        // file
-        std::ifstream file;
-        uint64_t uncompSize = 0;
-        uint64_t compSize = 0;
+// Writing
+ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
+ZPACK_EXPORT int zpack_init_writer_heap(zpack_writer* writer, size_t initial_size);
 
-        // entries
-        EntryList entryList;
+ZPACK_EXPORT int zpack_write_header(zpack_writer* writer);
+ZPACK_EXPORT int zpack_write_header_ex(zpack_writer* writer, zpack_u16 version);
+ZPACK_EXPORT int zpack_write_data_header(zpack_writer* writer);
+ZPACK_EXPORT int zpack_write_files(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
+ZPACK_EXPORT int zpack_write_files_from_archive(zpack_writer* writer, zpack_archive* archive, zpack_file_entry* entries, zpack_u64 file_count);
+ZPACK_EXPORT int zpack_write_cdr(zpack_writer* writer);
+ZPACK_EXPORT int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u64 file_count);
+ZPACK_EXPORT int zpack_write_eocdr(zpack_writer* writer);
+ZPACK_EXPORT int zpack_write_eocdr_ex(zpack_writer* writer, zpack_u64 cdr_offset);
 
-        // zstd
-        ZSTD_DCtx* dCtx;
-        ZSTD_inBuffer* inBuffer;
-        ZSTD_outBuffer* outBuffer;
-    };
+ZPACK_EXPORT int zpack_write_archive(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
+ZPACK_EXPORT void zpack_close_writer(zpack_writer* writer);
 
-    /**
-     * Usage example:
-     * ```
-     * // Open the archive
-     * ZPack::Writer writer("archive.zpk");
-     *
-     * // Write the header
-     * writer.writeHeader();
-     *
-     * // Write the files
-     * writer.writeFile("file1.txt", "path/to/file1.txt", 3) // normal api
-     * writer.writeFileStream("file2.txt", "path/to/file2.txt", 12) // streaming api
-     *
-     * // Write the central directory record
-     * writer.writeCDR();
-     *
-     * // Write the end of central directory record
-     * writer.writeEOCDR();
-     *
-     * // Close the file and flush the writer
-     * writer.closeFile();
-     * writer.flush();
-     *
-     * ```
-     * The writer can be reused as many times as you want.
-     * @brief Archive writer
-     */
-    class ZPACK_API Writer
-    {
-    public:
-        // constructors
-        Writer();
-        Writer(const std::string& filename);
+#ifdef __cplusplus
+}
+#endif
 
-        // destructor
-        ~Writer();
-
-        // io operations
-
-        /**
-         * Opens an archive for writing.
-         * @param filename Name of the file.
-         */
-        int openFile(const std::string& filename);
-
-        /**
-         * Closes the archive and resets the writer to its initial state.
-         */
-        void closeFile();
-
-        // writing operations
-
-        /**
-         * Write the header into the archive.
-         */
-        int writeHeader();
-
-        /**
-         * Compress and write the file into the archive. Also appends the file to the entry list.\n
-         * @see Writer#writeFileStream
-         * @param filename Name of the file (in the CDR entry).
-         * @param src Buffer containing the data of the file.
-         * @param srcSize The buffer's size.
-         * @param compressionLevel The compression level to use for the file.
-         */
-        int writeFile(const std::string& filename, const char* src, size_t srcSize, int compressionLevel = 3);
-
-        /**
-         * Compress and write the file into the archive. Also appends the file to the entry list.\n
-         * @see Writer#writeFileStream
-         * @param filename Name of the file (in the CDR entry).
-         * @param inputFile The istream of the file.
-         * @param compressionLevel The compression level to use for the file.
-         */
-        int writeFile(const std::string& filename, std::istream* inputFile, int compressionLevel = 3);
-
-        /**
-         * Compress and write the file into the archive. Also appends the file to the entry list.\n
-         * @see Writer#writeFileStream
-         * @param filename Name of the file (in the CDR entry).
-         * @param inputFile Path to the file.
-         * @param compressionLevel The compression level to use for the file.
-         */
-        int writeFile(const std::string& filename, const std::string& inputFile, int compressionLevel = 3);
-
-        /**
-         * Compress and write the file into the archive. Also appends the file to the entry list.\n
-         * This is the streaming variant which uses ZSTD's streaming API.
-         * @see Writer#writeFile
-         * @param filename Name of the file (in the CDR entry).
-         * @param inputFile The istream of the file.
-         * @param compressionLevel The compression level to use for the file.
-         */
-        int writeFileStream(const std::string& filename, std::istream* inputFile, int compressionLevel = 3);
-
-        /**
-         * Compress and write the file into the archive. Also appends the file to the entry list.\n
-         * This is the streaming variant which uses ZSTD's streaming API.
-         * @see Writer#writeFile
-         * @param filename Name of the file (in the CDR entry).
-         * @param inputFile Path to the file.
-         * @param compressionLevel The compression level to use for the file.
-         */
-        int writeFileStream(const std::string& filename, const std::string& inputFile, int compressionLevel = 3);
-
-        /**
-         * Write the central directory record into the archive.
-         */
-        int writeCDR();
-
-        /**
-         * Write the end of central directory record into the archive.
-         */
-        int writeEOCDR();
-
-        // getters
-        
-        /**
-         * Get the total uncompressed size of the archive's files.
-         */
-        inline uint64_t getUncompSize() { return uncompSize; };
-
-        /**
-         * Get the total compressed size of the archive's files.
-         */
-        inline uint64_t getCompSize() { return compSize; };
-        
-        /**
-         * Get the underlying output file stream.
-         */
-        inline std::ofstream& getFileStream() { return file; };
-
-        /**
-         * Get the list of file entries.
-         */
-        inline EntryList getEntryList() { return entryList; };
-
-    private:
-        // file
-        std::ofstream file;
-        uint64_t uncompSize = 0;
-        uint64_t compSize = 0;
-        uint64_t cdrOffset = 0;
-
-        // entries
-        EntryList entryList;
-
-        // zstd
-        ZSTD_CCtx* cCtx;
-        ZSTD_inBuffer* inBuffer;
-        ZSTD_outBuffer* outBuffer;
-    };
-} // namespace ZPack
+#endif // __ZPACK_H__

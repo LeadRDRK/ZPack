@@ -1,6 +1,7 @@
-build/
-win32-build/
+/build
+/win32-build
 compile_commands.json
-.clangd/
-.cache/
-docs/generated/
+/.clangd
+/.cache
+/docs/generated
+/tests/workdir/out.zpk
