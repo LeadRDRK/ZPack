@@ -4,4 +4,4 @@ compile_commands.json
 /.clangd
 /.cache
 /docs/generated
-/tests/workdir/out.zpk
+/tests/workdir/out*

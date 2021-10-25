@@ -4,3 +4,6 @@
 [submodule "externals/xxHash"]
 	path = externals/xxHash
 	url = https://github.com/Cyan4973/xxHash.git
+[submodule "externals/lz4"]
+	path = externals/lz4
+	url = https://github.com/lz4/lz4.git

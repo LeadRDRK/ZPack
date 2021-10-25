@@ -14,8 +14,9 @@ zpack_bool read_and_verify_files(zpack_archive* archive, zpack_u8* buffer)
     {
         if ((ret = zpack_archive_read_file(archive, &archive->file_entries[i], buffer, BUFFER_SIZE)))
         {
-            printf("Failed to read %s (error %d)\n", archive->file_entries[i].filename, ret);
+            printf("Failed to read %s (error %d, last return %ld)\n", archive->file_entries[i].filename, ret, archive->last_return);
             passed = ZPACK_FALSE;
+            continue;
         }
 
         zpack_bool valid = memcmp(buffer, _files[i], archive->file_entries[i].uncomp_size) == 0;
@@ -29,8 +30,11 @@ zpack_bool read_and_verify_files(zpack_archive* archive, zpack_u8* buffer)
     return passed;
 }
 
-int main(int argc, char** argv)
+int read_archive(int num)
 {
+    printf("Archive #%d\n"
+           "----------------------\n", num);
+    
     zpack_archive archive;
     memset(&archive, 0, sizeof(archive));
 
@@ -40,7 +44,7 @@ int main(int argc, char** argv)
     // read from disk
     printf("File read test\n");
 
-    if ((ret = zpack_open_archive(&archive, "archive.zpk")))
+    if ((ret = zpack_open_archive(&archive, _archive_names[num])))
     {
         printf("Failed to open archive (error %d)\n", ret);
         return 1;
@@ -52,8 +56,8 @@ int main(int argc, char** argv)
     // read from buffer
     printf("Buffer read test\n");
 
-    zpack_u64 size = sizeof(_archive_buffer);
-    if ((ret = zpack_open_archive_memory(&archive, _archive_buffer, size)))
+    zpack_u64 size = _archive_sizes[num];
+    if ((ret = zpack_open_archive_memory(&archive, _archive_buffers[num], size)))
     {
         printf("Failed to open archive (error %d)\n", ret);
         return 1;
@@ -66,7 +70,7 @@ int main(int argc, char** argv)
     printf("Buffer read test (shared)\n");
 
     zpack_u8 tmp[size];
-    memcpy(tmp, _archive_buffer, size);
+    memcpy(tmp, _archive_buffers[num], size);
     if ((ret = zpack_open_archive_memory_shared(&archive, tmp, size)))
     {
         printf("Failed to open archive (error %d)\n", ret);
@@ -78,4 +82,16 @@ int main(int argc, char** argv)
 
     // 0 if passed, 1 if failed
     return !(passed1 && passed2 && passed3);
+}
+
+int main(int argc, char** argv)
+{
+    int ret;
+    for (int i = 0; i < ARCHIVE_COUNT; ++i)
+    {
+        if ((ret = read_archive(i)))
+            return ret;
+    }
+
+    return 0;
 }

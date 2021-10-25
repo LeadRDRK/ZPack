@@ -1,14 +1,26 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(zpack)
+project(zpack
+    LANGUAGES C
+)
 
 cmake_policy(SET CMP0077 NEW)
+include(CMakeDependentOption)
 
 option(ZPACK_BUILD_PROGRAMS "Build the ZPack command line utility" ON)
 option(ZPACK_BUILD_TESTS "Build the ZPack unit tests" OFF)
 
-option(ZPACK_BUILD_ZSTD_STATIC "Build zstd as a static library" ON)
-option(ZPACK_USE_SYSTEM_ZSTD "Use the system's zstd library instead" OFF)
-option(ZPACK_USE_SYSTEM_XXHASH "Use the system's xxHash library instead" OFF)
+option(ZPACK_DISABLE_ZSTD "Disable zstd support" OFF)
+option(ZPACK_DISABLE_LZ4 "Disable LZ4 support" OFF)
+
+option(ZPACK_USE_SYSTEM_LIBS "Use the system's libraries for all dependencies" OFF)
+cmake_dependent_option(ZPACK_USE_SYSTEM_ZSTD "Use the system's zstd library" OFF "NOT ZPACK_DISABLE_ZSTD; NOT ZPACK_USE_SYSTEM_LIBS" ON)
+cmake_dependent_option(ZPACK_USE_SYSTEM_LZ4 "Use the system's LZ4 library" OFF "NOT ZPACK_DISABLE_LZ4; NOT ZPACK_USE_SYSTEM_LIBS" ON)
+cmake_dependent_option(ZPACK_USE_SYSTEM_XXHASH "Use the system's xxHash library" OFF "NOT ZPACK_USE_SYSTEM_LIBS" ON)
+
+# validate options
+if(ZPACK_DISABLE_ZSTD AND ZPACK_DISABLE_LZ4)
+    message(FATAL_ERROR "At least one compression library must be enabled")
+endif()
 
 add_subdirectory(externals)
 
