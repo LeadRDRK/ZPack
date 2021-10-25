@@ -12,7 +12,6 @@ zpack_bool print_and_verify_archive(zpack_archive* archive)
     {
         zpack_bool entry_passed = (
             strcmp(entries[i].filename, _filenames[i]) == 0 &&
-            entries[i].comp_size == _comp_sizes[i] &&
             entries[i].uncomp_size == _uncomp_sizes[i] &&
             entries[i].hash == _hashes[i]
         );
@@ -37,8 +36,11 @@ zpack_bool print_and_verify_archive(zpack_archive* archive)
     return passed;
 }
 
-int main(int argc, char** argv)
+int open_archive(int num)
 {
+    printf("Archive #%d\n"
+           "----------------------\n", num);
+
     zpack_archive archive;
     memset(&archive, 0, sizeof(archive));
     int ret;
@@ -46,7 +48,7 @@ int main(int argc, char** argv)
     // read from disk
     printf("File read test\n");
 
-    if ((ret = zpack_open_archive(&archive, "archive.zpk")))
+    if ((ret = zpack_open_archive(&archive, _archive_names[num])))
     {
         printf("Error %d\n", ret);
         return 1;
@@ -58,8 +60,8 @@ int main(int argc, char** argv)
     // read from buffer
     printf("Buffer read test\n");
 
-    zpack_u64 size = sizeof(_archive_buffer);
-    if ((ret = zpack_open_archive_memory(&archive, _archive_buffer, size)))
+    zpack_u64 size = _archive_sizes[num];
+    if ((ret = zpack_open_archive_memory(&archive, _archive_buffers[num], size)))
     {
         printf("Error %d\n", ret);
         return 1;
@@ -72,7 +74,7 @@ int main(int argc, char** argv)
     printf("Buffer read test (shared)\n");
 
     zpack_u8 tmp[size];
-    memcpy(tmp, _archive_buffer, size);
+    memcpy(tmp, _archive_buffers[num], size);
     if ((ret = zpack_open_archive_memory_shared(&archive, tmp, size)))
     {
         printf("Error %d\n", ret);
@@ -84,4 +86,16 @@ int main(int argc, char** argv)
 
     // 0 if passed, 1 if failed
     return !(passed1 && passed2 && passed3);
+}
+
+int main(int argc, char** argv)
+{
+    int ret;
+    for (int i = 0; i < ARCHIVE_COUNT; ++i)
+    {
+        if ((ret = open_archive(i)))
+            return ret;
+    }
+
+    return 0;
 }

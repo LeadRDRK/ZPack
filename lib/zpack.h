@@ -35,16 +35,10 @@ typedef zpack_u8 zpack_bool;
 #define ZPACK_ARCHIVE_VERSION_MIN 1
 #define ZPACK_ARCHIVE_VERSION_MAX 1
 
-// forward decl
-typedef struct ZSTD_DCtx_s ZSTD_DCtx;
-typedef struct ZSTD_CCtx_s ZSTD_CCtx;
-typedef struct ZSTD_inBuffer_s ZSTD_inBuffer;
-typedef struct ZSTD_outBuffer_s ZSTD_outBuffer;
-
 typedef enum zpack_compression_method_e
 {
-    ZPACK_COMPRESSION_ZSTD,
-    ZPACK_COMPRESSION_LZ4
+    ZPACK_COMPRESSION_ZSTD = 0,
+    ZPACK_COMPRESSION_LZ4  = 1
 
 } zpack_compression_method;
 
@@ -69,7 +63,10 @@ typedef struct zpack_archive_s
     size_t file_size;
 
     // zstd
-    ZSTD_DCtx* zstd_dctx;
+    void* zstd_dctx;
+
+    // LZ4
+    void* lz4_dctx;
 
     size_t last_return; // last compression library return value
 
@@ -113,7 +110,10 @@ typedef struct zpack_writer_s
     zpack_u64 file_count;
 
     // zstd
-    ZSTD_CCtx* zstd_cctx;
+    void* zstd_cctx;
+    
+    // LZ4
+    void* lz4_cctx;
 
     size_t last_return; // last compression library return value
 
@@ -122,13 +122,6 @@ typedef struct zpack_writer_s
     zpack_u64 eocdr_offset;
 
 } zpack_writer;
-
-typedef struct zpack_streaming_state_s
-{
-    ZSTD_inBuffer* zstd_in_buffer;
-    ZSTD_outBuffer* zstd_out_buffer;
-
-} zpack_streaming_state;
 
 enum zpack_result
 {
@@ -143,15 +136,17 @@ enum zpack_result
     ZPACK_ERROR_READ_FAILED,          // An archive section is invalid
     ZPACK_ERROR_BLOCK_SIZE_INVALID,   // Invalid block size
     ZPACK_ERROR_VERSION_INCOMPATIBLE, // Archive version is not supported
-    ZPACK_ERROR_OUT_OF_MEMORY,        // Could not allocate enough memory
+    ZPACK_ERROR_MALLOC_FAILED,        // Failed to allocate memory
     ZPACK_ERROR_FILE_NOT_FOUND,       // Could not find file in archive
     ZPACK_ERROR_BUFFER_TOO_SMALL,     // Buffer size is too small
     ZPACK_ERROR_DECOMPRESS_FAILED,    // Decompression error (check last_return for the compression library's error code)
     ZPACK_ERROR_COMPRESS_FAILED,      // Compression error (check last_return for the compression library's error code)
     ZPACK_ERROR_FILE_HASH_MISMATCH,   // The decompressed file's hash does not match the original file's hash
+    ZPACK_ERROR_FILE_OFFSET_INVALID,  // The file's offset is invalid
+    ZPACK_ERROR_FILE_INCOMPLETE,      // The file's data is incomplete
     ZPACK_ERROR_COMP_METHOD_INVALID,  // Invalid compression method
-    ZPACK_ERROR_FILE_OFFSET_INVALID,  // File offset invalid
-    ZPACK_ERROR_WRITE_FAILED          // Failed to write data to file
+    ZPACK_ERROR_WRITE_FAILED,         // Failed to write data to file
+    ZPACK_ERROR_NOT_AVAILABLE         // Feature not available in this build of ZPack (compression method disabled, etc.)
 
 };
 
@@ -172,7 +167,7 @@ ZPACK_EXPORT int zpack_read_archive(zpack_archive* archive);
 
 ZPACK_EXPORT int zpack_archive_read_raw_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
 ZPACK_EXPORT int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
-ZPACK_EXPORT int zpack_archive_read_file_stream(zpack_archive* archive, zpack_file_entry* entry, zpack_streaming_state* state);
+//ZPACK_EXPORT int zpack_archive_read_file_stream(zpack_archive* archive, zpack_file_entry* entry, zpack_streaming_state* state);
 
 ZPACK_EXPORT int zpack_archive_get_file_entry(zpack_archive* archive, const char* filename, zpack_file_entry** entry);
 

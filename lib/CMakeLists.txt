@@ -1,19 +1,5 @@
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-# zstd
-if(NOT DEFINED ZSTD_LIBRARY)
-    if(ZPACK_USE_SYSTEM_ZSTD)
-        find_package(ZSTD REQUIRED)
-    else()
-        if(ZPACK_BUILD_ZSTD_STATIC)
-            set(ZSTD_LIBRARY libzstd_static)
-        else()
-            set(ZSTD_LIBRARY libzstd_shared)
-        endif()
-        set(ZSTD_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/externals/zstd/lib)
-    endif()
-endif()
-
 # xxHash
 if(NOT DEFINED xxHash_LIBRARIES)
     if(ZPACK_USE_SYSTEM_XXHASH)
@@ -21,6 +7,52 @@ if(NOT DEFINED xxHash_LIBRARIES)
     else()
         set(xxHash_LIBRARIES xxhash)
     endif()
+endif()
+
+# zstd
+if(NOT ZPACK_DISABLE_ZSTD)
+    if(NOT DEFINED ZSTD_LIBRARIES)
+        if(ZPACK_USE_SYSTEM_ZSTD)
+            find_package(ZSTD REQUIRED)
+        else()
+            # prefer shared library
+            if(ZSTD_BUILD_SHARED)
+                set(ZSTD_LIBRARIES libzstd_shared)
+            else()
+                set(ZSTD_LIBRARIES libzstd_static)
+            endif()
+            set(ZSTD_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/externals/zstd/lib)
+        endif()
+    endif()
+else()
+    set(ZPACK_DISABLE_DEFS ${ZPACK_DISABLE_DEFS} "ZPACK_DISABLE_ZSTD")
+endif()
+
+# lz4
+if(NOT ZPACK_DISABLE_LZ4)
+    if(NOT DEFINED LZ4_LIBRARIES)
+        if(ZPACK_USE_SYSTEM_LZ4)
+            find_package(LZ4 REQUIRED)
+        else()
+            # prefer shared library
+            if(TARGET lz4_shared)
+                set(LZ4_LIBRARIES lz4_shared)
+            else()
+                set(LZ4_LIBRARIES lz4_static)
+            endif()
+
+            ## cheap workaround
+            # since lz4 includes its own xxhash header in the lib directory,
+            # copy the lz4 headers to another directory to prevent include conflicts
+            file(COPY ${PROJECT_SOURCE_DIR}/externals/lz4/lib/lz4.h DESTINATION ${CMAKE_BINARY_DIR}/lib)
+            file(COPY ${PROJECT_SOURCE_DIR}/externals/lz4/lib/lz4hc.h DESTINATION ${CMAKE_BINARY_DIR}/lib)
+            file(COPY ${PROJECT_SOURCE_DIR}/externals/lz4/lib/lz4frame.h DESTINATION ${CMAKE_BINARY_DIR}/lib)
+
+            set(LZ4_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/lib)
+        endif()
+    endif()
+else()
+    set(ZPACK_DISABLE_DEFS ${ZPACK_DISABLE_DEFS} "ZPACK_DISABLE_LZ4")
 endif()
 
 # check library type
@@ -56,6 +88,6 @@ add_library(zpack ${ZPACK_LIBRARY_TYPE}
     zpack.h
 )
 set_property(TARGET zpack PROPERTY C_STANDARD 99)
-target_link_libraries(zpack ${ZSTD_LIBRARY} ${xxHash_LIBRARIES})
-target_include_directories(zpack PRIVATE ${ZSTD_INCLUDE_DIR} ${xxHash_INCLUDE_DIRS})
-target_compile_definitions(zpack PRIVATE ${ZPACK_ENDIAN_DEFS} ${ZPACK_LFS_DEFS})
+target_link_libraries(zpack ${xxHash_LIBRARIES} ${ZSTD_LIBRARIES} ${LZ4_LIBRARIES})
+target_include_directories(zpack PRIVATE ${xxHash_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIRS} ${LZ4_INCLUDE_DIRS})
+target_compile_definitions(zpack PRIVATE ${ZPACK_ENDIAN_DEFS} ${ZPACK_LFS_DEFS} ${ZPACK_DISABLE_DEFS})

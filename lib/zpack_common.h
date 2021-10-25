@@ -1,9 +1,18 @@
-#ifndef __ZPACK_UTILS_H__
-#define __ZPACK_UTILS_H__
+#ifndef __ZPACK_COMMON_H__
+#define __ZPACK_COMMON_H__
 
 #include "zpack.h"
 #include "zpack_export.h"
 #include <stdio.h>
+
+#ifndef ZPACK_DISABLE_ZSTD
+#include <zstd.h>
+#include <zstd_errors.h>
+#endif
+
+#ifndef ZPACK_DISABLE_LZ4
+#include <lz4frame.h>
+#endif
 
 #define ZPACK_READ_LE8(p)  *((const zpack_u8 *)(p))
 
@@ -28,6 +37,10 @@ int zpack_seek_and_write(FILE* fp, size_t offset, const zpack_u8* buffer, size_t
 
 int zpack_get_heap_size(int n);
 int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 needed);
+
+#ifndef ZPACK_DISABLE_ZSTD
+int zpack_get_zstd_result(size_t code);
+#endif
 
 // Platform specific stuff
 
@@ -74,4 +87,4 @@ ZPACK_EXPORT FILE* zpack_fopen(const char* filename, const char* mode);
 
 #endif
 
-#endif // __ZPACK_UTILS_H__
+#endif // __ZPACK_COMMON_H__

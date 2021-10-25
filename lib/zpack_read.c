@@ -1,9 +1,8 @@
 #include "zpack.h"
 #include "zpack_common.h"
-#include <zstd.h>
-#include <xxhash.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+#include <xxhash.h>
 
 int zpack_read_header_memory(const zpack_u8* buffer, zpack_u16* version)
 {
@@ -86,7 +85,7 @@ int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_file_entry* entry
     // filename
     zpack_u16 filename_len = ZPACK_READ_LE16(buffer);
     entry->filename = (char*)malloc(sizeof(char) * ((zpack_u32)filename_len + 1)); // for null terminator
-    if (entry->filename == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+    if (entry->filename == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     memcpy(entry->filename, buffer + 2, filename_len);
     // null terminator
     entry->filename[filename_len] = '\0';
@@ -110,7 +109,7 @@ int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** en
 {
     *entries = (zpack_file_entry*)realloc(*entries, sizeof(zpack_file_entry) * count);
     if (*entries == NULL)
-        return ZPACK_ERROR_OUT_OF_MEMORY;
+        return ZPACK_ERROR_MALLOC_FAILED;
 
     // read file entries
     int ret;
@@ -172,7 +171,7 @@ int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, z
     // file entries buffer
     zpack_u8* fe_buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * block_size);
     if (fe_buffer == NULL)
-        return ZPACK_ERROR_OUT_OF_MEMORY;
+        return ZPACK_ERROR_MALLOC_FAILED;
 
     // read and parse file entries
     if (!ZPACK_FREAD(fe_buffer, block_size, 1, fp))
@@ -302,7 +301,7 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
     if (archive->file)
     {
         comp_data = (zpack_u8*)malloc(sizeof(zpack_u8) * entry->comp_size);
-        if (comp_data == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+        if (comp_data == NULL) return ZPACK_ERROR_MALLOC_FAILED;
         int ret;
         if ((ret = zpack_archive_read_raw_file(archive, entry, comp_data, entry->comp_size)))
             return ret;
@@ -315,9 +314,17 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
     switch (entry->comp_method)
     {
     case ZPACK_COMPRESSION_ZSTD:
+    #ifndef ZPACK_DISABLE_ZSTD
         // create the decompression context if needed
         if (!archive->zstd_dctx)
+        {
             archive->zstd_dctx = ZSTD_createDCtx();
+            if (archive->zstd_dctx == NULL)
+            {
+                if (archive->file) free(comp_data);
+                return ZPACK_ERROR_MALLOC_FAILED;
+            }
+        }
         
         // and decompress the file
         archive->last_return = ZSTD_decompressDCtx(archive->zstd_dctx, buffer, max_size, comp_data, entry->comp_size);
@@ -325,9 +332,81 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
 
         // check for errors
         if (ZSTD_isError(archive->last_return))
-            return ZPACK_ERROR_DECOMPRESS_FAILED;
+        {
+            // ctx needs to be freed after an error
+            ZSTD_freeDCtx(archive->zstd_dctx);
+            archive->zstd_dctx = NULL;
+
+            int ret = zpack_get_zstd_result(archive->last_return);
+            return (ret != -1) ? ret : ZPACK_ERROR_DECOMPRESS_FAILED;
+        }
 
         break;
+    #else
+        if (archive->file) free(comp_data);
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
+    
+    case ZPACK_COMPRESSION_LZ4:
+    #ifndef ZPACK_DISABLE_LZ4
+        if (!archive->lz4_dctx)
+            LZ4F_createDecompressionContext((LZ4F_dctx**)&archive->lz4_dctx, LZ4F_VERSION);
+        
+        void* dst = buffer;
+        const void* src = comp_data;
+
+        size_t avail_out = max_size;
+        size_t avail_in = entry->comp_size;
+
+        // decompress the file
+        // even though this is meant to one-shot decompress everything,
+        // LZ4F_decompress might not read the entire thing in one go(?)
+        // so we have to do it like the streaming variant
+        while (avail_out > 0 && avail_in > 0)
+        {
+            size_t dst_size = avail_out;
+            size_t src_size = avail_in;
+
+            archive->last_return = LZ4F_decompress(archive->lz4_dctx, dst, &dst_size, src, &src_size, NULL);
+
+            if (LZ4F_isError(archive->last_return))
+            {
+                if (archive->file) free(comp_data);
+                // ctx needs to be freed after an error
+                LZ4F_freeDecompressionContext(archive->lz4_dctx);
+                archive->lz4_dctx = NULL;
+                return ZPACK_ERROR_DECOMPRESS_FAILED;
+            }
+
+            if (src_size)
+            {
+                src += src_size;
+                avail_in -= src_size;
+            }
+
+            if (dst_size)
+            {
+                dst += dst_size;
+                avail_out -= dst_size;
+            }
+        }
+        if (archive->file) free(comp_data);
+
+        // check if the decompression is complete
+        if (archive->last_return != 0)
+        {
+            if (avail_out > 0)
+                return ZPACK_ERROR_FILE_INCOMPLETE;
+            else
+                return ZPACK_ERROR_BUFFER_TOO_SMALL;
+        }
+        
+        break;
+    #else
+        if (archive->file) free(comp_data);
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
+
     }
 
     // verify hash
@@ -341,7 +420,7 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
 int zpack_open_archive_memory(zpack_archive* archive, const zpack_u8* buffer, size_t size)
 {
     archive->buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * size);
-    if (archive->buffer == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+    if (archive->buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     memcpy(archive->buffer, buffer, size);
 
     archive->file_size = size;
@@ -374,7 +453,7 @@ void zpack_close_archive(zpack_archive* archive)
     if (archive->file)
         ZPACK_FCLOSE(archive->file);
 
-    if (!archive->buffer_shared && archive->buffer)
+    if (!archive->buffer_shared)
         free(archive->buffer);
 
     if (archive->file_entries)
@@ -385,8 +464,13 @@ void zpack_close_archive(zpack_archive* archive)
         free(archive->file_entries);
     }
 
-    if (archive->zstd_dctx)
-        ZSTD_freeDCtx(archive->zstd_dctx);
+#ifndef ZPACK_DISABLE_ZSTD
+    ZSTD_freeDCtx(archive->zstd_dctx);
+#endif
+
+#ifndef ZPACK_DISABLE_LZ4
+    LZ4F_freeDecompressionContext(archive->lz4_dctx);
+#endif
 
     memset(archive, 0, sizeof(zpack_archive));
 }

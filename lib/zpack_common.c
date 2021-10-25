@@ -58,7 +58,28 @@ int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 
     {
         *capacity = zpack_get_heap_size(needed);
         *buffer = (zpack_u8*)realloc(*buffer, sizeof(zpack_u8) * (*capacity));
-        if (*buffer == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+        if (*buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     }
     return ZPACK_OK;
 }
+
+#ifndef ZPACK_DISABLE_ZSTD
+int zpack_get_zstd_result(size_t code)
+{
+    code = ZSTD_getErrorCode(code);
+    switch (code)
+    {
+    case ZSTD_error_no_error:
+        return ZPACK_OK;
+
+    case ZSTD_error_memory_allocation:
+        return ZPACK_ERROR_MALLOC_FAILED;
+    
+    case ZSTD_error_dstSize_tooSmall:
+        return ZPACK_ERROR_BUFFER_TOO_SMALL;
+    
+    default:
+        return -1;
+    }
+}
+#endif

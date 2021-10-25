@@ -2,11 +2,7 @@
 #include "zpack_common.h"
 #include <stdlib.h>
 #include <string.h>
-#include <zstd.h>
 #include <xxhash.h>
-
-// header size + data signature size
-#define ZPACK_INITIAL_HEAP_SIZE ZPACK_HEADER_SIZE + ZPACK_SIGNATURE_SIZE
 
 #define ZPACK_ADD_OFFSET_AND_SIZE(writer, sz) \
     writer->write_offset += sz; \
@@ -19,11 +15,13 @@ int zpack_init_writer(zpack_writer* writer, const char* path)
     return ZPACK_OK;
 }
 
+// header size + data signature size
+#define ZPACK_INITIAL_HEAP_SIZE ZPACK_HEADER_SIZE + ZPACK_SIGNATURE_SIZE
 int zpack_init_writer_heap(zpack_writer* writer, size_t initial_size)
 {
     writer->buffer_capacity = ZPACK_MAX(ZPACK_INITIAL_HEAP_SIZE, initial_size);
     writer->buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * writer->buffer_capacity);
-    if (!writer->buffer) return ZPACK_ERROR_OUT_OF_MEMORY;
+    if (!writer->buffer) return ZPACK_ERROR_MALLOC_FAILED;
     return ZPACK_OK;
 }
 
@@ -97,35 +95,51 @@ static size_t zpack_get_compress_bound(zpack_compression_method method, size_t s
     switch (method)
     {
     case ZPACK_COMPRESSION_ZSTD:
+    #ifndef ZPACK_DISABLE_ZSTD
         return ZSTD_compressBound(src_size);
+    #else
+        return 0;
+    #endif
     
     case ZPACK_COMPRESSION_LZ4:
-        return -1;
+    #ifndef ZPACK_DISABLE_LZ4
+        return LZ4F_compressBound(src_size, NULL);
+    #else
+        return 0;
+    #endif
 
     default:
-        return -1;
+        return 0;
 
     }
 }
 
+#define ZPACK_PROCEED_LZ4F(writer, offset) \
+    if (LZ4F_isError(writer->last_return)) \
+    { \
+        LZ4F_freeCompressionContext(writer->lz4_cctx); \
+        writer->lz4_cctx = NULL; \
+        return ZPACK_ERROR_COMPRESS_FAILED; \
+    } \
+    offset += writer->last_return
+
 static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t capacity,
                                const zpack_file* file, zpack_u64* comp_size)
 {
-    int level = file->options->level;
     switch (file->options->method)
     {
     case ZPACK_COMPRESSION_ZSTD:
+    #ifndef ZPACK_DISABLE_ZSTD
         // create the compression context if needed
         if (!writer->zstd_cctx)
+        {
             writer->zstd_cctx = ZSTD_createCCtx();
-        
-        // set compression level to default (3) if not set
-        if (!level)
-            level = 3;
+            if (writer->zstd_cctx == NULL) return ZPACK_ERROR_MALLOC_FAILED;
+        }
         
         // compress the file
         writer->last_return = ZSTD_compressCCtx(writer->zstd_cctx, buffer, capacity,
-                                                file->buffer, file->size, level);
+                                                file->buffer, file->size, file->options->level);
 
         // check for errors
         if (ZSTD_isError(writer->last_return))
@@ -133,9 +147,39 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
 
         *comp_size = writer->last_return;
         break;
+    #else
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
 
     case ZPACK_COMPRESSION_LZ4:
+    #ifndef ZPACK_DISABLE_LZ4
+        // create the compression context if needed
+        if (!writer->lz4_cctx)
+        {
+            if (LZ4F_createCompressionContext((LZ4F_cctx**)&writer->lz4_cctx, LZ4F_VERSION))
+                return ZPACK_ERROR_MALLOC_FAILED;
+        }
+
+        // compress the file
+        LZ4F_preferences_t prefs;
+        memset(&prefs, 0, sizeof(LZ4F_preferences_t));
+        prefs.compressionLevel = file->options->level;
+        size_t offset = 0;
+
+        writer->last_return = LZ4F_compressBegin(writer->lz4_cctx, buffer + offset, capacity - offset, &prefs);
+        ZPACK_PROCEED_LZ4F(writer, offset);
+
+        writer->last_return = LZ4F_compressUpdate(writer->lz4_cctx, buffer + offset, capacity - offset, file->buffer, file->size, NULL);
+        ZPACK_PROCEED_LZ4F(writer, offset);
+
+        writer->last_return = LZ4F_compressEnd(writer->lz4_cctx, buffer + offset, capacity - offset, NULL);
+        ZPACK_PROCEED_LZ4F(writer, offset);
+
+        *comp_size = offset;
         break;
+    #else
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
 
     default:
         break;
@@ -161,7 +205,7 @@ static zpack_file_entry* zpack_push_file_entry(zpack_writer* writer)
 static int zpack_add_written_file_entry(zpack_writer* writer, zpack_file* file, zpack_u64 comp_size)
 {
     zpack_file_entry* entry = zpack_push_file_entry(writer);
-    if (entry == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+    if (entry == NULL) return ZPACK_ERROR_MALLOC_FAILED;
 
     // filename
     size_t str_size = strlen(file->filename) + 1;
@@ -181,7 +225,7 @@ static int zpack_add_written_file_entry(zpack_writer* writer, zpack_file* file, 
 static int zpack_copy_file_entry(zpack_writer* writer, zpack_file_entry* src_entry, zpack_u64 new_offset)
 {
     zpack_file_entry* entry = zpack_push_file_entry(writer);
-    if (entry == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+    if (entry == NULL) return ZPACK_ERROR_MALLOC_FAILED;
 
     memcpy(entry, src_entry, sizeof(zpack_file_entry));
 
@@ -209,7 +253,7 @@ int zpack_write_files(zpack_writer* writer, zpack_file* files, zpack_u64 file_co
         if (buffer_capacity < compress_bound)
         {
             buffer = (zpack_u8*)realloc(buffer, sizeof(zpack_u8) * compress_bound);
-            if (buffer == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+            if (buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
             buffer_capacity = compress_bound;
         }
 
@@ -390,7 +434,7 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
     if (writer->file)
     {
         zpack_u8* buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * size);
-        if (buffer == NULL) return ZPACK_ERROR_OUT_OF_MEMORY;
+        if (buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
         zpack_write_cdr_memory(buffer, entries, file_count, fn_lengths, block_size);
 
         if ((ret = zpack_seek_and_write(writer->file, writer->write_offset, buffer, size)))
@@ -477,8 +521,7 @@ void zpack_close_writer(zpack_writer* writer)
     if (writer->file)
         ZPACK_FCLOSE(writer->file);
     
-    if (writer->buffer)
-        free(writer->buffer);
+    free(writer->buffer);
 
     if (writer->file_entries)
     {
@@ -488,8 +531,14 @@ void zpack_close_writer(zpack_writer* writer)
         free(writer->file_entries);
     }
 
-    if (writer->zstd_cctx)
-        ZSTD_freeCCtx(writer->zstd_cctx);
+    // compression contexts
+#ifndef ZPACK_DISABLE_ZSTD
+    ZSTD_freeCCtx(writer->zstd_cctx);
+#endif
+
+#ifndef ZPACK_DISABLE_LZ4
+    LZ4F_freeCompressionContext(writer->lz4_cctx);
+#endif
 
     memset(writer, 0, sizeof(zpack_writer));
 }
