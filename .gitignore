@@ -3,5 +3,6 @@
 compile_commands.json
 /.clangd
 /.cache
+/.vscode
 /docs/generated
 /tests/workdir/out*
