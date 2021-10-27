@@ -182,16 +182,16 @@ int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, z
     return ZPACK_OK;
 }
 
-int zpack_read_archive_memory(zpack_archive *archive)
+int zpack_read_archive_memory(zpack_reader* reader)
 {
-    if (!archive->buffer) return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
+    if (!reader->buffer) return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
 
     // read sections
     int ret;
-    const zpack_u8* p = archive->buffer;
+    const zpack_u8* p = reader->buffer;
 
     // header
-    if ((ret = zpack_read_header_memory(p, &archive->version)))
+    if ((ret = zpack_read_header_memory(p, &reader->version)))
         return ret;
 
     // files data signature
@@ -200,63 +200,63 @@ int zpack_read_archive_memory(zpack_archive *archive)
         return ret;
 
     // eocdr
-    archive->eocdr_offset = archive->file_size - ZPACK_EOCDR_SIZE;
-    p = archive->buffer + archive->eocdr_offset;
-    if ((ret = zpack_read_eocdr_memory(p, &archive->cdr_offset)))
+    reader->eocdr_offset = reader->file_size - ZPACK_EOCDR_SIZE;
+    p = reader->buffer + reader->eocdr_offset;
+    if ((ret = zpack_read_eocdr_memory(p, &reader->cdr_offset)))
         return ret;
 
     // cdr
-    p = archive->buffer + archive->cdr_offset;
-    if ((ret = zpack_read_cdr_memory(p, archive->file_size - archive->cdr_offset, &archive->file_entries, &archive->file_count,
-                                     &archive->comp_size, &archive->uncomp_size)))
+    p = reader->buffer + reader->cdr_offset;
+    if ((ret = zpack_read_cdr_memory(p, reader->file_size - reader->cdr_offset, &reader->file_entries, &reader->file_count,
+                                     &reader->comp_size, &reader->uncomp_size)))
         return ret;
 
     // all good
     return ZPACK_OK; 
 }
 
-int zpack_read_archive(zpack_archive* archive)
+int zpack_read_archive(zpack_reader* reader)
 {
-    if (!archive->file) return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
+    if (!reader->file) return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
 
     // get size
-    if (ZPACK_FSEEK(archive->file, 0, SEEK_END) != 0)
+    if (ZPACK_FSEEK(reader->file, 0, SEEK_END) != 0)
         return ZPACK_ERROR_SEEK_FAILED;
     
-    archive->file_size = ZPACK_FTELL(archive->file);
+    reader->file_size = ZPACK_FTELL(reader->file);
 
     // read sections
     int ret;
 
     // header
-    if ((ret = zpack_read_header(archive->file, &archive->version)))
+    if ((ret = zpack_read_header(reader->file, &reader->version)))
         return ret;
 
     // files data signature
-    if ((ret = zpack_read_data_header(archive->file)))
+    if ((ret = zpack_read_data_header(reader->file)))
         return ret;
 
     // eocdr
-    archive->eocdr_offset = archive->file_size - ZPACK_EOCDR_SIZE;
-    if ((ret = zpack_read_eocdr(archive->file, archive->eocdr_offset, &archive->cdr_offset)))
+    reader->eocdr_offset = reader->file_size - ZPACK_EOCDR_SIZE;
+    if ((ret = zpack_read_eocdr(reader->file, reader->eocdr_offset, &reader->cdr_offset)))
         return ret;
 
     // cdr
-    if ((ret = zpack_read_cdr(archive->file, archive->cdr_offset, &archive->file_entries, 
-                              &archive->file_count, &archive->comp_size, &archive->uncomp_size)))
+    if ((ret = zpack_read_cdr(reader->file, reader->cdr_offset, &reader->file_entries, 
+                              &reader->file_count, &reader->comp_size, &reader->uncomp_size)))
         return ret;
 
     // all good
     return ZPACK_OK;
 }
 
-int zpack_archive_get_file_entry(zpack_archive* archive, const char* filename, zpack_file_entry** entry)
+int zpack_get_file_entry(zpack_reader* reader, const char* filename, zpack_file_entry** entry)
 {
-    for (int i = 0; i < archive->file_count; ++i)
+    for (int i = 0; i < reader->file_count; ++i)
     {
-        if (strcmp(archive->file_entries[i].filename, filename) == 0)
+        if (strcmp(reader->file_entries[i].filename, filename) == 0)
         {
-            *entry = archive->file_entries + i;
+            *entry = reader->file_entries + i;
             return ZPACK_OK;
         }
     }
@@ -264,27 +264,27 @@ int zpack_archive_get_file_entry(zpack_archive* archive, const char* filename, z
     return ZPACK_ERROR_FILE_NOT_FOUND;
 }
 
-int zpack_archive_read_raw_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size)
+int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size)
 {
     // offset check
-    if (entry->offset >= archive->file_size)
+    if (entry->offset >= reader->file_size)
         return ZPACK_ERROR_FILE_OFFSET_INVALID;
 
     // shrink read size to max size
     zpack_u64 read_size = ZPACK_MIN(max_size, entry->comp_size);
-    if (archive->file)
+    if (reader->file)
     {
-        if (ZPACK_FSEEK(archive->file, entry->offset, SEEK_SET) != 0)
+        if (ZPACK_FSEEK(reader->file, entry->offset, SEEK_SET) != 0)
             return ZPACK_ERROR_SEEK_FAILED;
         
-        if (ZPACK_FREAD(buffer, 1, read_size, archive->file) != read_size)
+        if (ZPACK_FREAD(buffer, 1, read_size, reader->file) != read_size)
             return ZPACK_ERROR_READ_FAILED;
     }
-    else if (archive->buffer)
+    else if (reader->buffer)
     {
         // Note: This function just copies data from the already loaded buffer.
         // It might be better to just read straight from the buffer itself if possible.
-        memcpy(buffer, archive->buffer + entry->offset, read_size);
+        memcpy(buffer, reader->buffer + entry->offset, read_size);
     }
     else
         return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
@@ -292,22 +292,23 @@ int zpack_archive_read_raw_file(zpack_archive* archive, zpack_file_entry* entry,
     return ZPACK_OK;
 }
 
-int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size)
+int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size)
 {
+    if (entry->comp_size == 0) return ZPACK_OK;
     if (max_size < entry->uncomp_size) return ZPACK_ERROR_BUFFER_TOO_SMALL;
 
     // read the compressed data
     zpack_u8* comp_data;
-    if (archive->file)
+    if (reader->file)
     {
         comp_data = (zpack_u8*)malloc(sizeof(zpack_u8) * entry->comp_size);
         if (comp_data == NULL) return ZPACK_ERROR_MALLOC_FAILED;
         int ret;
-        if ((ret = zpack_archive_read_raw_file(archive, entry, comp_data, entry->comp_size)))
+        if ((ret = zpack_read_raw_file(reader, entry, comp_data, entry->comp_size)))
             return ret;
     }
-    else if (archive->buffer)
-        comp_data = archive->buffer + entry->offset;
+    else if (reader->buffer)
+        comp_data = reader->buffer + entry->offset;
     else
         return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
     
@@ -316,41 +317,41 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
         // create the decompression context if needed
-        if (!archive->zstd_dctx)
+        if (!reader->zstd_dctx)
         {
-            archive->zstd_dctx = ZSTD_createDCtx();
-            if (archive->zstd_dctx == NULL)
+            reader->zstd_dctx = ZSTD_createDCtx();
+            if (reader->zstd_dctx == NULL)
             {
-                if (archive->file) free(comp_data);
+                if (reader->file) free(comp_data);
                 return ZPACK_ERROR_MALLOC_FAILED;
             }
         }
         
         // and decompress the file
-        archive->last_return = ZSTD_decompressDCtx(archive->zstd_dctx, buffer, max_size, comp_data, entry->comp_size);
-        if (archive->file) free(comp_data);
+        reader->last_return = ZSTD_decompressDCtx(reader->zstd_dctx, buffer, max_size, comp_data, entry->comp_size);
+        if (reader->file) free(comp_data);
 
         // check for errors
-        if (ZSTD_isError(archive->last_return))
+        if (ZSTD_isError(reader->last_return))
         {
             // ctx needs to be freed after an error
-            ZSTD_freeDCtx(archive->zstd_dctx);
-            archive->zstd_dctx = NULL;
+            ZSTD_freeDCtx(reader->zstd_dctx);
+            reader->zstd_dctx = NULL;
 
-            int ret = zpack_get_zstd_result(archive->last_return);
+            int ret = zpack_get_zstd_result(reader->last_return);
             return (ret != -1) ? ret : ZPACK_ERROR_DECOMPRESS_FAILED;
         }
 
         break;
     #else
-        if (archive->file) free(comp_data);
+        if (reader->file) free(comp_data);
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
     
     case ZPACK_COMPRESSION_LZ4:
     #ifndef ZPACK_DISABLE_LZ4
-        if (!archive->lz4_dctx)
-            LZ4F_createDecompressionContext((LZ4F_dctx**)&archive->lz4_dctx, LZ4F_VERSION);
+        if (!reader->lz4_dctx)
+            LZ4F_createDecompressionContext((LZ4F_dctx**)&reader->lz4_dctx, LZ4F_VERSION);
         
         void* dst = buffer;
         const void* src = comp_data;
@@ -361,20 +362,19 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
         // decompress the file
         // even though this is meant to one-shot decompress everything,
         // LZ4F_decompress might not read the entire thing in one go(?)
-        // so we have to do it like the streaming variant
         while (avail_out > 0 && avail_in > 0)
         {
             size_t dst_size = avail_out;
             size_t src_size = avail_in;
 
-            archive->last_return = LZ4F_decompress(archive->lz4_dctx, dst, &dst_size, src, &src_size, NULL);
+            reader->last_return = LZ4F_decompress(reader->lz4_dctx, dst, &dst_size, src, &src_size, NULL);
 
-            if (LZ4F_isError(archive->last_return))
+            if (LZ4F_isError(reader->last_return))
             {
-                if (archive->file) free(comp_data);
+                if (reader->file) free(comp_data);
                 // ctx needs to be freed after an error
-                LZ4F_freeDecompressionContext(archive->lz4_dctx);
-                archive->lz4_dctx = NULL;
+                LZ4F_freeDecompressionContext(reader->lz4_dctx);
+                reader->lz4_dctx = NULL;
                 return ZPACK_ERROR_DECOMPRESS_FAILED;
             }
 
@@ -390,10 +390,10 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
                 avail_out -= dst_size;
             }
         }
-        if (archive->file) free(comp_data);
+        if (reader->file) free(comp_data);
 
         // check if the decompression is complete
-        if (archive->last_return != 0)
+        if (reader->last_return != 0)
         {
             if (avail_out > 0)
                 return ZPACK_ERROR_FILE_INCOMPLETE;
@@ -403,7 +403,7 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
         
         break;
     #else
-        if (archive->file) free(comp_data);
+        if (reader->file) free(comp_data);
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
 
@@ -417,60 +417,67 @@ int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpa
     return ZPACK_OK;
 }
 
-int zpack_open_archive_memory(zpack_archive* archive, const zpack_u8* buffer, size_t size)
+int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t read_size)
 {
-    archive->buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * size);
-    if (archive->buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
-    memcpy(archive->buffer, buffer, size);
+    if (entry->comp_size == 0) return ZPACK_OK;
 
-    archive->file_size = size;
-    archive->buffer_shared = ZPACK_FALSE;
-
-    return zpack_read_archive_memory(archive);
+    return ZPACK_OK;
 }
 
-int zpack_open_archive_memory_shared(zpack_archive* archive, zpack_u8* buffer, size_t size)
+int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size)
 {
-    archive->buffer = buffer;
-    archive->file_size = size;
-    archive->buffer_shared = ZPACK_TRUE;
+    reader->buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * size);
+    if (reader->buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
+    memcpy(reader->buffer, buffer, size);
 
-    return zpack_read_archive_memory(archive);
+    reader->file_size = size;
+    reader->buffer_shared = ZPACK_FALSE;
+
+    return zpack_read_archive_memory(reader);
 }
 
-int zpack_open_archive(zpack_archive* archive, const char* path)
+int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size)
+{
+    reader->buffer = buffer;
+    reader->file_size = size;
+    reader->buffer_shared = ZPACK_TRUE;
+
+    return zpack_read_archive_memory(reader);
+}
+
+int zpack_init_reader(zpack_reader* reader, const char* path)
 {
     FILE* fp = ZPACK_FOPEN(path, "rb");
     if (!fp) return ZPACK_ERROR_OPEN_FAILED;
-    if (archive->file) ZPACK_FCLOSE(archive->file);
-    archive->file = fp;
+    if (reader->file) ZPACK_FCLOSE(reader->file);
+    reader->file = fp;
 
-    return zpack_read_archive(archive);
+    return zpack_read_archive(reader);
 }
 
-void zpack_close_archive(zpack_archive* archive)
+void zpack_close_reader(zpack_reader* reader)
 {
-    if (archive->file)
-        ZPACK_FCLOSE(archive->file);
+    if (reader->file)
+        ZPACK_FCLOSE(reader->file);
 
-    if (!archive->buffer_shared)
-        free(archive->buffer);
+    if (!reader->buffer_shared)
+        free(reader->buffer);
 
-    if (archive->file_entries)
+    if (reader->file_entries)
     {
-        for (zpack_u64 i = 0; i < archive->file_count; ++i)
-            free(archive->file_entries[i].filename);
+        for (zpack_u64 i = 0; i < reader->file_count; ++i)
+            free(reader->file_entries[i].filename);
 
-        free(archive->file_entries);
+        free(reader->file_entries);
     }
 
 #ifndef ZPACK_DISABLE_ZSTD
-    ZSTD_freeDCtx(archive->zstd_dctx);
+    ZSTD_freeDCtx(reader->zstd_dctx);
 #endif
 
 #ifndef ZPACK_DISABLE_LZ4
-    LZ4F_freeDecompressionContext(archive->lz4_dctx);
+    LZ4F_freeDecompressionContext(reader->lz4_dctx);
 #endif
 
-    memset(archive, 0, sizeof(zpack_archive));
+    memset(reader, 0, sizeof(zpack_reader));
 }

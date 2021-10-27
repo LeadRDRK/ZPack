@@ -53,7 +53,7 @@ typedef struct zpack_file_entry_s
     
 } zpack_file_entry;
 
-typedef struct zpack_archive_s
+typedef struct zpack_reader_s
 {
     zpack_u16 version;
     zpack_file_entry* file_entries;
@@ -78,7 +78,7 @@ typedef struct zpack_archive_s
     zpack_bool buffer_shared;
     FILE* file;
 
-} zpack_archive;
+} zpack_reader;
 
 typedef struct zpack_compress_options_s
 {
@@ -123,10 +123,21 @@ typedef struct zpack_writer_s
 
 } zpack_writer;
 
+typedef struct zpack_stream_s
+{
+    void* in_buffer;
+    void* out_buffer;
+
+    size_t avail_in;
+    size_t avail_out;
+
+    size_t offset;
+
+} zpack_stream;
+
 enum zpack_result
 {
     ZPACK_OK,                         // No errors
-    ZPACK_DONE,                       // (Streaming) decompression is done
 
     ZPACK_ERROR_ARCHIVE_NOT_LOADED,   // Archive has not been loaded
     ZPACK_ERROR_WRITER_NOT_OPENED,    // Writer has not been opened
@@ -146,6 +157,7 @@ enum zpack_result
     ZPACK_ERROR_FILE_INCOMPLETE,      // The file's data is incomplete
     ZPACK_ERROR_COMP_METHOD_INVALID,  // Invalid compression method
     ZPACK_ERROR_WRITE_FAILED,         // Failed to write data to file
+    ZPACK_ERROR_NO_INPUT_BUFFER,      // An input buffer was not provided (required for streaming decompression)
     ZPACK_ERROR_NOT_AVAILABLE         // Feature not available in this build of ZPack (compression method disabled, etc.)
 
 };
@@ -160,21 +172,22 @@ ZPACK_EXPORT int zpack_read_eocdr(FILE* fp, zpack_u64 eocdr_offset, zpack_u64* c
 ZPACK_EXPORT int zpack_read_cdr_header_memory(const zpack_u8* buffer, zpack_u64* count, zpack_u64* block_size);
 ZPACK_EXPORT int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_file_entry* entry, size_t* entry_size);
 ZPACK_EXPORT int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 count, zpack_u64 block_size, zpack_u64* total_cs, zpack_u64* total_us);
+
 ZPACK_EXPORT int zpack_read_cdr_memory(const zpack_u8* buffer, size_t size_left, zpack_file_entry** entries, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
 ZPACK_EXPORT int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
-ZPACK_EXPORT int zpack_read_archive_memory(zpack_archive* archive);
-ZPACK_EXPORT int zpack_read_archive(zpack_archive* archive);
+ZPACK_EXPORT int zpack_read_archive_memory(zpack_reader* reader);
+ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
 
-ZPACK_EXPORT int zpack_archive_read_raw_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
-ZPACK_EXPORT int zpack_archive_read_file(zpack_archive* archive, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
-//ZPACK_EXPORT int zpack_archive_read_file_stream(zpack_archive* archive, zpack_file_entry* entry, zpack_streaming_state* state);
+ZPACK_EXPORT int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
+ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
+ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t read_size);
 
-ZPACK_EXPORT int zpack_archive_get_file_entry(zpack_archive* archive, const char* filename, zpack_file_entry** entry);
+ZPACK_EXPORT int zpack_get_file_entry(zpack_reader* reader, const char* filename, zpack_file_entry** entry);
 
-ZPACK_EXPORT int zpack_open_archive_memory(zpack_archive* archive, const zpack_u8* buffer, size_t size);
-ZPACK_EXPORT int zpack_open_archive_memory_shared(zpack_archive* archive, zpack_u8* buffer, size_t size);
-ZPACK_EXPORT int zpack_open_archive(zpack_archive* archive, const char* path);
-ZPACK_EXPORT void zpack_close_archive(zpack_archive* archive);
+ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size);
+ZPACK_EXPORT int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size);
+ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
+ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
 
 // Writing
 ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
@@ -184,7 +197,7 @@ ZPACK_EXPORT int zpack_write_header(zpack_writer* writer);
 ZPACK_EXPORT int zpack_write_header_ex(zpack_writer* writer, zpack_u16 version);
 ZPACK_EXPORT int zpack_write_data_header(zpack_writer* writer);
 ZPACK_EXPORT int zpack_write_files(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
-ZPACK_EXPORT int zpack_write_files_from_archive(zpack_writer* writer, zpack_archive* archive, zpack_file_entry* entries, zpack_u64 file_count);
+ZPACK_EXPORT int zpack_write_files_from_archive(zpack_writer* writer, zpack_reader* reader, zpack_file_entry* entries, zpack_u64 file_count);
 ZPACK_EXPORT int zpack_write_cdr(zpack_writer* writer);
 ZPACK_EXPORT int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u64 file_count);
 ZPACK_EXPORT int zpack_write_eocdr(zpack_writer* writer);

@@ -304,7 +304,7 @@ int zpack_write_files(zpack_writer* writer, zpack_file* files, zpack_u64 file_co
     return ZPACK_OK;
 }
 
-int zpack_write_files_from_archive(zpack_writer* writer, zpack_archive* archive, zpack_file_entry* entries, zpack_u64 file_count)
+int zpack_write_files_from_archive(zpack_writer* writer, zpack_reader* reader, zpack_file_entry* entries, zpack_u64 file_count)
 {
     zpack_u8* buffer = NULL;
     size_t buffer_capacity = 0;
@@ -313,7 +313,7 @@ int zpack_write_files_from_archive(zpack_writer* writer, zpack_archive* archive,
     int ret;
     for (zpack_u64 i = 0; i < file_count; ++i)
     {
-        if (archive->file)
+        if (reader->file)
         {
             if (buffer_capacity < entries[i].comp_size)
             {
@@ -322,20 +322,20 @@ int zpack_write_files_from_archive(zpack_writer* writer, zpack_archive* archive,
                 buffer_alloc = ZPACK_TRUE;
             }
 
-            if ((ret = zpack_archive_read_raw_file(archive, entries + i, buffer, buffer_capacity)))
+            if ((ret = zpack_read_raw_file(reader, entries + i, buffer, buffer_capacity)))
             {
                 free(buffer);
                 return ret;
             }
         }
-        else if (archive->buffer)
+        else if (reader->buffer)
         {
-            if (entries[i].offset >= archive->file_size)
+            if (entries[i].offset >= reader->file_size)
             {
                 if (buffer_alloc) free(buffer);
                 return ZPACK_ERROR_FILE_OFFSET_INVALID;
             }
-            buffer = archive->buffer + entries[i].offset;
+            buffer = reader->buffer + entries[i].offset;
         }
         else
             return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
