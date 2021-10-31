@@ -96,12 +96,19 @@ static size_t zpack_get_compress_bound(zpack_compression_method method, size_t s
     {
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
-        return ZSTD_compressBound(src_size);
+        return ZSTD_COMPRESSBOUND(src_size);
     #else
         return 0;
     #endif
     
     case ZPACK_COMPRESSION_LZ4:
+    #ifndef ZPACK_DISABLE_LZ4
+        return LZ4_COMPRESSBOUND(src_size);
+    #else
+        return 0;
+    #endif
+
+    case ZPACK_COMPRESSION_LZ4F:
     #ifndef ZPACK_DISABLE_LZ4
         return LZ4F_compressBound(src_size, NULL);
     #else
@@ -117,8 +124,8 @@ static size_t zpack_get_compress_bound(zpack_compression_method method, size_t s
 #define ZPACK_PROCEED_LZ4F(writer, offset) \
     if (LZ4F_isError(writer->last_return)) \
     { \
-        LZ4F_freeCompressionContext(writer->lz4_cctx); \
-        writer->lz4_cctx = NULL; \
+        LZ4F_freeCompressionContext(writer->lz4f_cctx); \
+        writer->lz4f_cctx = NULL; \
         return ZPACK_ERROR_COMPRESS_FAILED; \
     } \
     offset += writer->last_return
@@ -153,10 +160,34 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
 
     case ZPACK_COMPRESSION_LZ4:
     #ifndef ZPACK_DISABLE_LZ4
-        // create the compression context if needed
-        if (!writer->lz4_cctx)
+        if (file->options->level > 0)
         {
-            if (LZ4F_createCompressionContext((LZ4F_cctx**)&writer->lz4_cctx, LZ4F_VERSION))
+            // LZ4HC (level > 0)
+            writer->last_return = LZ4_compress_HC((const char*)file->buffer, (char*)buffer,
+                                                  file->size, capacity, file->options->level);
+        }
+        else
+        {
+            // Normal/Fast acceleration (level = 0 or negative)
+            writer->last_return = LZ4_compress_fast((const char*)file->buffer, (char*)buffer,
+                                                    file->size, capacity, -file->options->level + 1);
+        }
+
+        if (!writer->last_return)
+            return ZPACK_ERROR_COMPRESS_FAILED;
+
+        *comp_size = writer->last_return;
+        break;
+    #else
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
+
+    case ZPACK_COMPRESSION_LZ4F:
+    #ifndef ZPACK_DISABLE_LZ4
+        // create the compression context if needed
+        if (!writer->lz4f_cctx)
+        {
+            if (LZ4F_createCompressionContext((LZ4F_cctx**)&writer->lz4f_cctx, LZ4F_VERSION))
                 return ZPACK_ERROR_MALLOC_FAILED;
         }
 
@@ -166,13 +197,13 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
         prefs.compressionLevel = file->options->level;
         size_t offset = 0;
 
-        writer->last_return = LZ4F_compressBegin(writer->lz4_cctx, buffer + offset, capacity - offset, &prefs);
+        writer->last_return = LZ4F_compressBegin(writer->lz4f_cctx, buffer + offset, capacity - offset, &prefs);
         ZPACK_PROCEED_LZ4F(writer, offset);
 
-        writer->last_return = LZ4F_compressUpdate(writer->lz4_cctx, buffer + offset, capacity - offset, file->buffer, file->size, NULL);
+        writer->last_return = LZ4F_compressUpdate(writer->lz4f_cctx, buffer + offset, capacity - offset, file->buffer, file->size, NULL);
         ZPACK_PROCEED_LZ4F(writer, offset);
 
-        writer->last_return = LZ4F_compressEnd(writer->lz4_cctx, buffer + offset, capacity - offset, NULL);
+        writer->last_return = LZ4F_compressEnd(writer->lz4f_cctx, buffer + offset, capacity - offset, NULL);
         ZPACK_PROCEED_LZ4F(writer, offset);
 
         *comp_size = offset;
@@ -182,7 +213,7 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
     #endif
 
     default:
-        break;
+        return ZPACK_ERROR_COMP_METHOD_INVALID;
 
     }
     return ZPACK_OK;
@@ -537,7 +568,7 @@ void zpack_close_writer(zpack_writer* writer)
 #endif
 
 #ifndef ZPACK_DISABLE_LZ4
-    LZ4F_freeCompressionContext(writer->lz4_cctx);
+    LZ4F_freeCompressionContext(writer->lz4f_cctx);
 #endif
 
     memset(writer, 0, sizeof(zpack_writer));

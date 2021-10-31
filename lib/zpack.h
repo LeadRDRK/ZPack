@@ -5,6 +5,12 @@
 extern "C" {
 #endif
 
+#define ZPACK_VERSION_MAJOR 2
+#define ZPACK_VERSION_MINOR 0
+#define ZPACK_VERSION_PATCH 0
+#define ZPACK_VERSION (ZPACK_VERSION_MAJOR * 100000 + ZPACK_VERSION_MINOR * 1000 + ZPACK_VERSION_PATCH * 10)
+#define ZPACK_VERSION_STRING "2.0.0"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -38,7 +44,8 @@ typedef zpack_u8 zpack_bool;
 typedef enum zpack_compression_method_e
 {
     ZPACK_COMPRESSION_ZSTD = 0,
-    ZPACK_COMPRESSION_LZ4  = 1
+    ZPACK_COMPRESSION_LZ4  = 1,
+    ZPACK_COMPRESSION_LZ4F = 2
 
 } zpack_compression_method;
 
@@ -66,7 +73,8 @@ typedef struct zpack_reader_s
     void* zstd_dctx;
 
     // LZ4
-    void* lz4_dctx;
+    void* lz4_dstream;
+    void* lz4f_dctx;
 
     size_t last_return; // last compression library return value
 
@@ -113,7 +121,8 @@ typedef struct zpack_writer_s
     void* zstd_cctx;
     
     // LZ4
-    void* lz4_cctx;
+    void* lz4_cstream;
+    void* lz4f_cctx;
 
     size_t last_return; // last compression library return value
 
@@ -125,13 +134,15 @@ typedef struct zpack_writer_s
 
 typedef struct zpack_stream_s
 {
-    void* in_buffer;
-    void* out_buffer;
+    zpack_u8* next_in;
+    zpack_u32 avail_in;
+    size_t total_in;
 
-    size_t avail_in;
-    size_t avail_out;
+    zpack_u8* next_out;
+    zpack_u32 avail_out;
+    size_t total_out;
 
-    size_t offset;
+    void* ctx;
 
 } zpack_stream;
 
@@ -153,11 +164,12 @@ enum zpack_result
     ZPACK_ERROR_DECOMPRESS_FAILED,    // Decompression error (check last_return for the compression library's error code)
     ZPACK_ERROR_COMPRESS_FAILED,      // Compression error (check last_return for the compression library's error code)
     ZPACK_ERROR_FILE_HASH_MISMATCH,   // The decompressed file's hash does not match the original file's hash
-    ZPACK_ERROR_FILE_OFFSET_INVALID,  // The file's offset is invalid
+    ZPACK_ERROR_FILE_OFFSET_INVALID,  // Invalid file offset
     ZPACK_ERROR_FILE_INCOMPLETE,      // The file's data is incomplete
+    ZPACK_ERROR_FILE_SIZE_INVALID,    // Invalid file size
     ZPACK_ERROR_COMP_METHOD_INVALID,  // Invalid compression method
     ZPACK_ERROR_WRITE_FAILED,         // Failed to write data to file
-    ZPACK_ERROR_NO_INPUT_BUFFER,      // An input buffer was not provided (required for streaming decompression)
+    ZPACK_ERROR_STREAM_INVALID,       // Invalid stream
     ZPACK_ERROR_NOT_AVAILABLE         // Feature not available in this build of ZPack (compression method disabled, etc.)
 
 };
@@ -179,8 +191,9 @@ ZPACK_EXPORT int zpack_read_archive_memory(zpack_reader* reader);
 ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
 
 ZPACK_EXPORT int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
-ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
-ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t read_size);
+ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size, void* dctx);
+ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t* in_size);
+ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream);
 
 ZPACK_EXPORT int zpack_get_file_entry(zpack_reader* reader, const char* filename, zpack_file_entry** entry);
 
@@ -205,6 +218,12 @@ ZPACK_EXPORT int zpack_write_eocdr_ex(zpack_writer* writer, zpack_u64 cdr_offset
 
 ZPACK_EXPORT int zpack_write_archive(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
 ZPACK_EXPORT void zpack_close_writer(zpack_writer* writer);
+
+// Utils
+ZPACK_EXPORT size_t zpack_get_dstream_in_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_dstream_out_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
 
 #ifdef __cplusplus
 }

@@ -11,6 +11,8 @@
 #endif
 
 #ifndef ZPACK_DISABLE_LZ4
+#include <lz4.h>
+#include <lz4hc.h>
 #include <lz4frame.h>
 #endif
 
@@ -37,10 +39,6 @@ int zpack_seek_and_write(FILE* fp, size_t offset, const zpack_u8* buffer, size_t
 
 int zpack_get_heap_size(int n);
 int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 needed);
-
-#ifndef ZPACK_DISABLE_ZSTD
-int zpack_get_zstd_result(size_t code);
-#endif
 
 // Platform specific stuff
 
