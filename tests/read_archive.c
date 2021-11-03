@@ -3,7 +3,7 @@
 #include "archive.h"
 
 #define BUFFER_SIZE 350
-#define STREAM_IN_SIZE 128 // LZ4 needs to read the entire block
+#define STREAM_IN_SIZE 16
 #define STREAM_OUT_SIZE BUFFER_SIZE
 zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
 {
@@ -31,11 +31,14 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
     // Streaming decompression
     printf("* Streaming\n");
     zpack_u8 in_buf[STREAM_IN_SIZE];
-    zpack_stream stream;
-    stream.ctx = NULL;
+    zpack_stream stream = { 0, 0, 0, 0, 0, 0, 0 };
+    if (zpack_init_stream(&stream))
+    {
+        printf("Failed to init stream\n");
+        return ZPACK_FALSE;
+    }
     for (int i = 0; i < reader->file_count; ++i)
     {
-        // reset stream
         stream.next_out = buffer;
         stream.avail_out = STREAM_OUT_SIZE;
         stream.total_out = 0;
@@ -44,12 +47,11 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
         int passes = 0;
         for (;;)
         {
-            // reset
             stream.next_in = in_buf;
             stream.avail_in = STREAM_IN_SIZE;
             stream.avail_out = STREAM_OUT_SIZE;
 
-            if ((ret = zpack_read_file_stream(reader, reader->file_entries + i, &stream)))
+            if ((ret = zpack_read_file_stream(reader, reader->file_entries + i, &stream, NULL)))
             {
                 printf("Failed to read %s (error %d, last return %ld)\n", reader->file_entries[i].filename, ret, reader->last_return);
                 passed = ZPACK_FALSE;
@@ -57,7 +59,7 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
             }
 
             ++passes;
-            printf("pass %d, total_in %lu, total_out %lu\n", passes, stream.total_in, stream.total_out);
+            //printf("pass %d, total_in %lu, total_out %lu\n", passes, stream.total_in, stream.total_out);
 
             if (stream.total_out == reader->file_entries[i].uncomp_size) break;
         }
@@ -68,6 +70,7 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
 
         memset(buffer, 0, BUFFER_SIZE);
     }
+    zpack_close_stream(&stream);
 
     return passed;
 }

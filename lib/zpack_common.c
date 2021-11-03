@@ -1,4 +1,5 @@
 #include "zpack_common.h"
+#include <xxhash.h>
 #include <stdlib.h>
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
@@ -61,4 +62,23 @@ int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 
         if (*buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     }
     return ZPACK_OK;
+}
+
+int zpack_init_stream(zpack_stream* stream)
+{
+    if (!stream->xxh3_state)
+    {
+        if ((stream->xxh3_state = XXH3_createState()) == NULL)
+            return ZPACK_ERROR_MALLOC_FAILED;
+        
+        // init
+        if (XXH3_64bits_reset(stream->xxh3_state) == XXH_ERROR)
+            return ZPACK_ERROR_HASH_FAILED;
+    }
+    return ZPACK_OK;
+}
+
+void zpack_close_stream(zpack_stream *stream)
+{
+    XXH3_freeState(stream->xxh3_state);
 }

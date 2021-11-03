@@ -8,6 +8,22 @@
     writer->write_offset += sz; \
     writer->file_size += sz
 
+#define ZPACK_CHECK_CCTX_ZSTD(cctx, writer) \
+    if (!cctx) \
+    { \
+        if (!writer->zstd_cctx) \
+            writer->zstd_cctx = ZSTD_createCCtx(); \
+        cctx = writer->zstd_cctx; \
+    }
+
+#define ZPACK_CHECK_CCTX_LZ4(cctx, writer) \
+    if (!cctx) \
+    { \
+        if (!writer->lz4f_cctx) \
+            LZ4F_createCompressionContext((LZ4F_cctx**)&writer->lz4f_cctx, LZ4F_VERSION); \
+        cctx = writer->lz4f_cctx; \
+    }
+
 int zpack_init_writer(zpack_writer* writer, const char* path)
 {
     writer->file = ZPACK_FOPEN(path, "wb");
@@ -100,15 +116,8 @@ static size_t zpack_get_compress_bound(zpack_compression_method method, size_t s
     #else
         return 0;
     #endif
-    
-    case ZPACK_COMPRESSION_LZ4:
-    #ifndef ZPACK_DISABLE_LZ4
-        return LZ4_COMPRESSBOUND(src_size);
-    #else
-        return 0;
-    #endif
 
-    case ZPACK_COMPRESSION_LZ4F:
+    case ZPACK_COMPRESSION_LZ4:
     #ifndef ZPACK_DISABLE_LZ4
         return LZ4F_compressBound(src_size, NULL);
     #else
@@ -131,21 +140,18 @@ static size_t zpack_get_compress_bound(zpack_compression_method method, size_t s
     offset += writer->last_return
 
 static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t capacity,
-                               const zpack_file* file, zpack_u64* comp_size)
+                               const zpack_file* file, zpack_u64* comp_size, void* cctx)
 {
     switch (file->options->method)
     {
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
         // create the compression context if needed
-        if (!writer->zstd_cctx)
-        {
-            writer->zstd_cctx = ZSTD_createCCtx();
-            if (writer->zstd_cctx == NULL) return ZPACK_ERROR_MALLOC_FAILED;
-        }
+        ZPACK_CHECK_CCTX_ZSTD(cctx, writer);
+        if (!cctx) return ZPACK_ERROR_MALLOC_FAILED;
         
         // compress the file
-        writer->last_return = ZSTD_compressCCtx(writer->zstd_cctx, buffer, capacity,
+        writer->last_return = ZSTD_compressCCtx(cctx, buffer, capacity,
                                                 file->buffer, file->size, file->options->level);
 
         // check for errors
@@ -160,36 +166,9 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
 
     case ZPACK_COMPRESSION_LZ4:
     #ifndef ZPACK_DISABLE_LZ4
-        if (file->options->level > 0)
-        {
-            // LZ4HC (level > 0)
-            writer->last_return = LZ4_compress_HC((const char*)file->buffer, (char*)buffer,
-                                                  file->size, capacity, file->options->level);
-        }
-        else
-        {
-            // Normal/Fast acceleration (level = 0 or negative)
-            writer->last_return = LZ4_compress_fast((const char*)file->buffer, (char*)buffer,
-                                                    file->size, capacity, -file->options->level + 1);
-        }
-
-        if (!writer->last_return)
-            return ZPACK_ERROR_COMPRESS_FAILED;
-
-        *comp_size = writer->last_return;
-        break;
-    #else
-        return ZPACK_ERROR_NOT_AVAILABLE;
-    #endif
-
-    case ZPACK_COMPRESSION_LZ4F:
-    #ifndef ZPACK_DISABLE_LZ4
         // create the compression context if needed
-        if (!writer->lz4f_cctx)
-        {
-            if (LZ4F_createCompressionContext((LZ4F_cctx**)&writer->lz4f_cctx, LZ4F_VERSION))
-                return ZPACK_ERROR_MALLOC_FAILED;
-        }
+        ZPACK_CHECK_CCTX_LZ4(cctx, writer);
+        if (!cctx) return ZPACK_ERROR_MALLOC_FAILED;
 
         // compress the file
         LZ4F_preferences_t prefs;
@@ -197,13 +176,13 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
         prefs.compressionLevel = file->options->level;
         size_t offset = 0;
 
-        writer->last_return = LZ4F_compressBegin(writer->lz4f_cctx, buffer + offset, capacity - offset, &prefs);
+        writer->last_return = LZ4F_compressBegin(cctx, buffer + offset, capacity - offset, &prefs);
         ZPACK_PROCEED_LZ4F(writer, offset);
 
-        writer->last_return = LZ4F_compressUpdate(writer->lz4f_cctx, buffer + offset, capacity - offset, file->buffer, file->size, NULL);
+        writer->last_return = LZ4F_compressUpdate(cctx, buffer + offset, capacity - offset, file->buffer, file->size, NULL);
         ZPACK_PROCEED_LZ4F(writer, offset);
 
-        writer->last_return = LZ4F_compressEnd(writer->lz4f_cctx, buffer + offset, capacity - offset, NULL);
+        writer->last_return = LZ4F_compressEnd(cctx, buffer + offset, capacity - offset, NULL);
         ZPACK_PROCEED_LZ4F(writer, offset);
 
         *comp_size = offset;
@@ -241,6 +220,7 @@ static int zpack_add_written_file_entry(zpack_writer* writer, zpack_file* file, 
     // filename
     size_t str_size = strlen(file->filename) + 1;
     entry->filename = (char*)malloc(sizeof(char) * str_size);
+    if (entry->filename == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     memcpy(entry->filename, file->filename, str_size);
 
     // others
@@ -263,6 +243,7 @@ static int zpack_copy_file_entry(zpack_writer* writer, zpack_file_entry* src_ent
     // deep copy filename
     size_t str_size = strlen(src_entry->filename) + 1;
     entry->filename = (char*)malloc(sizeof(char) * str_size);
+    if (entry->filename == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     memcpy(entry->filename, src_entry->filename, str_size);
 
     entry->offset = new_offset;
@@ -289,7 +270,7 @@ int zpack_write_files(zpack_writer* writer, zpack_file* files, zpack_u64 file_co
         }
 
         // compress the file
-        if ((ret = zpack_compress_file(writer, buffer, buffer_capacity, files + i, &comp_size)))
+        if ((ret = zpack_compress_file(writer, buffer, buffer_capacity, files + i, &comp_size, files[i].cctx)))
         {
             free(buffer);
             return ret;
@@ -415,6 +396,209 @@ int zpack_write_files_from_archive(zpack_writer* writer, zpack_reader* reader, z
     }
 
     if (buffer_alloc) free(buffer);
+    return ZPACK_OK;
+}
+
+int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* options, zpack_stream* stream, void* cctx)
+{
+    switch (options->method)
+    {
+    case ZPACK_COMPRESSION_ZSTD:
+        ZPACK_CHECK_CCTX_ZSTD(cctx, writer);
+        break;
+    
+    case ZPACK_COMPRESSION_LZ4:
+        ZPACK_CHECK_CCTX_LZ4(cctx, writer);
+        break;
+
+    }
+    if (!cctx) return ZPACK_ERROR_MALLOC_FAILED;
+
+    // calculate hash
+    if (XXH3_64bits_update(stream->xxh3_state, stream->next_in, stream->avail_in) == XXH_ERROR)
+        return ZPACK_ERROR_HASH_FAILED;
+
+    // compress
+    zpack_bool flushed = ZPACK_FALSE;
+    size_t read_pos = 0;
+    int ret;
+    while (!flushed)
+    {
+        size_t write_size = 0;
+        switch (options->method)
+        {
+        case ZPACK_COMPRESSION_ZSTD:
+        {
+            ZSTD_outBuffer output = { stream->next_out, stream->avail_out, 0 };
+            ZSTD_inBuffer input = { stream->next_in, stream->avail_in, read_pos };
+            writer->last_return = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_continue);
+
+            if (ZSTD_isError(writer->last_return))
+            {
+                ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters);
+                XXH3_64bits_reset(stream->xxh3_state);
+                return ZPACK_ERROR_COMPRESS_FAILED;
+            }
+
+            flushed = (input.pos == input.size);
+            write_size = output.pos;
+            read_pos = input.pos;
+            break;
+        }
+
+        case ZPACK_COMPRESSION_LZ4:
+            if (stream->total_out == 0)
+                writer->last_return = LZ4F_compressBegin(cctx, stream->next_out, stream->avail_out, NULL);
+            else
+            {
+                writer->last_return = LZ4F_compressUpdate(cctx, stream->next_out, stream->avail_out,
+                                                          stream->next_in, stream->avail_in, NULL);
+                read_pos = stream->avail_in;
+                flushed = ZPACK_TRUE;
+            }
+
+            if (LZ4F_isError(writer->last_return))
+            {
+                XXH3_64bits_reset(stream->xxh3_state);
+                return ZPACK_ERROR_COMPRESS_FAILED;
+            }
+
+            write_size = writer->last_return;
+            break;
+
+        default:
+            return ZPACK_ERROR_COMP_METHOD_INVALID;
+
+        }
+        stream->next_in  += read_pos;
+        stream->avail_in -= read_pos;
+        stream->total_in += read_pos;
+
+        // write to output
+        if (write_size == 0) continue;
+
+        if (writer->file)
+        {
+            if ((ret = zpack_seek_and_write(writer->file, writer->write_offset, stream->next_out, write_size)))
+                return ret;
+        }
+        else if (writer->buffer)
+        {
+            if ((ret = zpack_check_and_grow_heap(&writer->buffer, &writer->buffer_capacity,
+                                                 writer->file_size + write_size)))
+                return ret;
+            
+            memcpy(writer->buffer + writer->write_offset, stream->next_out, write_size);
+        }
+        else
+            return ZPACK_ERROR_WRITER_NOT_OPENED;
+        
+        stream->total_out += write_size;
+        ZPACK_ADD_OFFSET_AND_SIZE(writer, write_size);
+    }
+
+    return ZPACK_OK;
+}
+
+int zpack_write_file_stream_end(zpack_writer* writer, char* filename, zpack_compress_options* options, zpack_stream* stream, void* cctx)
+{
+    switch (options->method)
+    {
+    case ZPACK_COMPRESSION_ZSTD:
+        ZPACK_CHECK_CCTX_ZSTD(cctx, writer);
+        break;
+    
+    case ZPACK_COMPRESSION_LZ4:
+        ZPACK_CHECK_CCTX_LZ4(cctx, writer);
+        break;
+
+    }
+    if (!cctx) return ZPACK_ERROR_MALLOC_FAILED;
+
+    zpack_bool flushed = ZPACK_FALSE;
+    int ret;
+    while (!flushed)
+    {
+        size_t write_size = 0;
+        switch (options->method)
+        {
+        case ZPACK_COMPRESSION_ZSTD:
+        {
+            ZSTD_outBuffer output = { stream->next_out, stream->avail_out, 0 };
+            ZSTD_inBuffer input = { NULL, 0, 0 };
+            writer->last_return = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_end);
+
+            if (ZSTD_isError(writer->last_return))
+            {
+                ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters);
+                XXH3_64bits_reset(stream->xxh3_state);
+                return ZPACK_ERROR_COMPRESS_FAILED;
+            }
+
+            flushed = (writer->last_return == 0);
+            write_size = output.pos;
+            break;
+        }
+
+        case ZPACK_COMPRESSION_LZ4:
+            writer->last_return = LZ4F_compressEnd(cctx, stream->next_out, stream->avail_out, NULL);
+
+            if (LZ4F_isError(writer->last_return))
+            {
+                XXH3_64bits_reset(stream->xxh3_state);
+                return ZPACK_ERROR_COMPRESS_FAILED;
+            }
+
+            flushed = ZPACK_TRUE; // always flushed 😳
+            write_size = writer->last_return;
+            break;
+
+        default:
+            return ZPACK_ERROR_COMP_METHOD_INVALID;
+
+        }
+
+        // write to output
+        if (write_size == 0) continue;
+
+        if (writer->file)
+        {
+            if ((ret = zpack_seek_and_write(writer->file, writer->write_offset, stream->next_out, write_size)))
+                return ret;
+        }
+        else if (writer->buffer)
+        {
+            if ((ret = zpack_check_and_grow_heap(&writer->buffer, &writer->buffer_capacity,
+                                                 writer->file_size + write_size)))
+                return ret;
+            
+            memcpy(writer->buffer + writer->write_offset, stream->next_out, write_size);
+        }
+        else
+            return ZPACK_ERROR_WRITER_NOT_OPENED;
+        
+        stream->total_out += write_size;
+        ZPACK_ADD_OFFSET_AND_SIZE(writer, write_size);
+    }
+
+    // add file entry
+    zpack_file_entry* entry = zpack_push_file_entry(writer);
+    if (entry == NULL) return ZPACK_ERROR_MALLOC_FAILED;
+
+    // filename
+    size_t str_size = strlen(filename) + 1;
+    entry->filename = (char*)malloc(sizeof(char) * str_size);
+    if (entry->filename == NULL) return ZPACK_ERROR_MALLOC_FAILED;
+    memcpy(entry->filename, filename, str_size);
+
+    // others
+    entry->offset = writer->write_offset - stream->total_out;
+    entry->comp_size = stream->total_out;
+    entry->uncomp_size = stream->total_in;
+    entry->hash = XXH3_64bits_digest(stream->xxh3_state);
+    entry->comp_method = options->method;
+
+    XXH3_64bits_reset(stream->xxh3_state);
     return ZPACK_OK;
 }
 
@@ -572,4 +756,40 @@ void zpack_close_writer(zpack_writer* writer)
 #endif
 
     memset(writer, 0, sizeof(zpack_writer));
+}
+
+zpack_u32 zpack_get_cstream_in_size(zpack_compression_method method)
+{
+    switch (method)
+    {
+    #ifndef ZPACK_DISABLE_ZSTD
+    case ZPACK_COMPRESSION_ZSTD:
+        return ZSTD_CStreamInSize();
+    #endif
+
+    #ifndef ZPACK_DISABLE_LZ4
+    case ZPACK_COMPRESSION_LZ4:
+        return (1 << 16); // 64kb
+    #endif
+
+    default: return 0;
+    }
+}
+
+zpack_u32 zpack_get_cstream_out_size(zpack_compression_method method)
+{
+    switch (method)
+    {
+    #ifndef ZPACK_DISABLE_ZSTD
+    case ZPACK_COMPRESSION_ZSTD:
+        return ZSTD_CStreamOutSize();
+    #endif
+
+    #ifndef ZPACK_DISABLE_LZ4
+    case ZPACK_COMPRESSION_LZ4:
+        return LZ4F_compressBound(0, NULL);
+    #endif
+
+    default: return 0;
+    }
 }
