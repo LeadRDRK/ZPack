@@ -4,13 +4,101 @@
 #include <string.h>
 #include "archive.h"
 
-static const char* _out_names[3] = {
+static const char* _out_names[2] = {
     "out_zstd.zpk",
-    "out_lz4.zpk",
-    "out_lz4f.zpk"
+    "out_lz4.zpk"
 };
 
-int write_archive(zpack_compression_method method)
+static const char* _out_names_s[2] = {
+    "out_zstd_streaming.zpk",
+    "out_lz4_streaming.zpk"
+};
+
+#define WRITE_ERROR(writer, ret, func_name) \
+    printf("-- Got error %d from " func_name ", last_return %ld\n", ret, (writer)->last_return); \
+    zpack_close_writer(writer); \
+    return ZPACK_FALSE;
+
+zpack_bool write_archive_oneshot(zpack_writer* writer, zpack_file* files, zpack_compression_method method)
+{
+    int ret;
+    if ((ret = zpack_write_archive(writer, files, 2)))
+    {
+        WRITE_ERROR(writer, ret, "zpack_write_archive");
+    }
+
+    zpack_close_writer(writer);
+    printf("-- Archive write successful\n");
+    return ZPACK_TRUE;
+}
+
+#define STREAM_IN_SIZE 16
+zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpack_compression_method method)
+{
+    int ret;
+    if ((ret = zpack_write_header(writer)))
+    {
+        WRITE_ERROR(writer, ret, "zpack_write_header");
+    }
+
+    if ((ret = zpack_write_data_header(writer)))
+    {
+        WRITE_ERROR(writer, ret, "zpack_write_data_header");
+    }
+
+    zpack_stream stream;
+    memset(&stream, 0, sizeof(stream));
+    if ((ret = zpack_init_stream(&stream)))
+    {
+        WRITE_ERROR(writer, ret, "zpack_init_stream");
+    }
+    zpack_u32 stream_out_size = zpack_get_cstream_out_size(ZPACK_COMPRESSION_ZSTD);
+    zpack_u8 out_buf[stream_out_size];
+    stream.next_out = out_buf;
+    stream.avail_out = stream_out_size;
+
+    for (int i = 0; i < FILE_COUNT; ++i)
+    {
+        // reset
+        stream.next_in = files[i].buffer;
+        stream.total_in = 0;
+        stream.total_out = 0;
+
+        while (stream.total_in < files[i].size)
+        {
+            stream.avail_in = ZPACK_MIN(STREAM_IN_SIZE, files[i].size - stream.total_in);
+
+            if ((ret = zpack_write_file_stream(writer, files[i].options, &stream, NULL)))
+            {
+                zpack_close_stream(&stream);
+                WRITE_ERROR(writer, ret, "zpack_write_file_stream");
+            }
+        }
+        
+        if ((ret = zpack_write_file_stream_end(writer, files[i].filename, files[i].options, &stream, NULL)))
+        {
+            zpack_close_stream(&stream);
+            WRITE_ERROR(writer, ret, "zpack_write_file_stream_end");
+        }
+    }
+    zpack_close_stream(&stream);
+
+    if ((ret = zpack_write_cdr(writer)))
+    {
+        WRITE_ERROR(writer, ret, "zpack_write_cdr");
+    }
+
+    if ((ret = zpack_write_eocdr(writer)))
+    {
+        WRITE_ERROR(writer, ret, "zpack_write_eocdr");
+    }
+
+    zpack_close_writer(writer);
+    printf("-- Archive write successful\n");
+    return ZPACK_TRUE;
+}
+
+zpack_bool write_archives(zpack_compression_method method)
 {
     FILE* fp;
     zpack_compress_options options;
@@ -22,22 +110,20 @@ int write_archive(zpack_compression_method method)
         break;
     
     case ZPACK_COMPRESSION_LZ4:
-        options.level = 0;
-        break;
-    
-    case ZPACK_COMPRESSION_LZ4F:
         options.level = 1;
         break;
+
     }
     printf("Compression method %d\n", method);
 
-    zpack_file files[2];
-    for (int i = 0; i < 2; ++i)
+    zpack_file files[FILE_COUNT];
+    for (int i = 0; i < FILE_COUNT; ++i)
     {
         files[i].filename = _filenames[i];
-        files[i].buffer = (unsigned char*)_files[i];
+        files[i].buffer = (zpack_u8*)_files[i];
         files[i].size = _uncomp_sizes[i];
         files[i].options = &options;
+        files[i].cctx = NULL;
     }
 
     zpack_writer writer;
@@ -46,87 +132,57 @@ int write_archive(zpack_compression_method method)
     /**** Write to file ****/
     int ret;
     printf("Write to file\n");
+
+    printf("* Oneshot\n");
     if ((ret = zpack_init_writer(&writer, _out_names[method])))
     {
-        printf("-- Got error %d from zpack_init_writer\n", ret);
-        zpack_close_writer(&writer);
-        return 1;
+        WRITE_ERROR(&writer, ret, "zpack_init_writer");
     }
 
-    if ((ret = zpack_write_archive(&writer, files, 2)))
+    if (!write_archive_oneshot(&writer, files, method))
+        return ZPACK_FALSE;
+    
+    printf("* Streaming\n");
+    if ((ret = zpack_init_writer(&writer, _out_names_s[method])))
     {
-        printf("-- Got error %d from zpack_write_archive\n", ret);
-        zpack_close_writer(&writer);
-        return 1;
+        WRITE_ERROR(&writer, ret, "zpack_init_writer");
     }
 
-    zpack_close_writer(&writer);
-
-    // Verify archive
-    /*
-    zpack_u8 buffer[_archive_sizes[method]];
-    fp = ZPACK_FOPEN(_out_names[method], "rb");
-    if (!ZPACK_FREAD(buffer, _archive_sizes[method], 1, fp))
-    {
-        printf("-- Failed to read written archive\n");
-        zpack_close_writer(&writer);
-        return 1;
-    }
-    ZPACK_FCLOSE(fp);
-    if (memcmp(_archive_buffers[method], buffer, _archive_sizes[method]) != 0)
-    {
-        printf("-- Written archive is invalid\n");
-        zpack_close_writer(&writer);
-        return 1;
-    }
-    */
-
-    zpack_close_writer(&writer);
-    printf("-- Archive write to %s successful\n", _out_names[method]);
+    if (!write_archive_streaming(&writer, files, method))
+        return ZPACK_FALSE;
 
     /**** Write to buffer ****/
     printf("Write to buffer\n");
+
+    printf("* Oneshot\n");
     if ((ret = zpack_init_writer_heap(&writer, 0)))
     {
-        printf("Got error %d from zpack_init_writer\n", ret);
-        zpack_close_writer(&writer);
-        return 1;
+        WRITE_ERROR(&writer, ret, "zpack_init_writer_heap");
     }
 
-    if ((ret = zpack_write_archive(&writer, files, 2)))
-    {
-        printf("Got error %d from zpack_init_writer\n", ret);
-        zpack_close_writer(&writer);
-        return 1;
-    }
-
-    // Verify archive
-    /*
-    if (memcmp(_archive_buffer, writer.buffer, writer.file_size) != 0)
-    {
-        printf("-- Written archive is invalid\n");
-        zpack_close_writer(&writer);
-        return 1;
-    }
-    */
-
-    printf("-- Archive write to buffer successful\n\n");
-    zpack_close_writer(&writer);
+    if (!write_archive_oneshot(&writer, files, method))
+        return ZPACK_FALSE;
     
-    return 0;
+    printf("* Streaming\n");
+    if ((ret = zpack_init_writer_heap(&writer, 0)))
+    {
+        WRITE_ERROR(&writer, ret, "zpack_init_writer_heap");
+    }
+
+    if (!write_archive_streaming(&writer, files, method))
+        return ZPACK_FALSE;
+    
+    printf("\n");
+    return ZPACK_TRUE;
 }
 
 int main()
 {
-    int ret;
-    if ((ret = write_archive(ZPACK_COMPRESSION_ZSTD)))
-        return ret;
-
-    if ((ret = write_archive(ZPACK_COMPRESSION_LZ4)))
-        return ret;
-
-    if ((ret = write_archive(ZPACK_COMPRESSION_LZ4F)))
-        return ret;
-
+    for (int i = 0; i < ARCHIVE_COUNT; ++i)
+    {
+        if (!write_archives(i))
+            return 1;
+    }
+    
     return 0;
 }

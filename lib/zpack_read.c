@@ -5,8 +5,21 @@
 #include <limits.h>
 #include <xxhash.h>
 
-// change this to LZ4_decompress_default if you want to use it instead
-#define ZPACK_LZ4_DECOMPRESS LZ4_decompress_safe
+#define ZPACK_CHECK_DCTX_ZSTD(dctx, reader) \
+    if (!dctx) \
+    { \
+        if (!reader->zstd_dctx) \
+            reader->zstd_dctx = ZSTD_createDCtx(); \
+        dctx = reader->zstd_dctx; \
+    }
+
+#define ZPACK_CHECK_DCTX_LZ4(dctx, reader) \
+    if (!dctx) \
+    { \
+        if (!reader->lz4f_dctx) \
+            LZ4F_createDecompressionContext((LZ4F_dctx**)&reader->lz4f_dctx, LZ4F_VERSION); \
+        dctx = reader->lz4f_dctx; \
+    }
 
 int zpack_read_header_memory(const zpack_u8* buffer, zpack_u16* version)
 {
@@ -323,19 +336,11 @@ int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buf
     {
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
-        // create the decompression context if needed
+        ZPACK_CHECK_DCTX_ZSTD(dctx, reader);
         if (!dctx)
         {
-            if (!reader->zstd_dctx)
-            {
-                reader->zstd_dctx = ZSTD_createDCtx();
-                if (reader->zstd_dctx == NULL)
-                {
-                    if (reader->file) free(comp_data);
-                    return ZPACK_ERROR_MALLOC_FAILED;
-                }
-            }
-            dctx = reader->zstd_dctx;
+            if (reader->file) free(comp_data);
+            return ZPACK_ERROR_MALLOC_FAILED;
         }
         
         // and decompress the file
@@ -354,41 +359,15 @@ int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buf
         if (reader->file) free(comp_data);
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
-
+    
     case ZPACK_COMPRESSION_LZ4:
     #ifndef ZPACK_DISABLE_LZ4
-        // check if the file size is valid
-        if (entry->comp_size > INT_MAX)
-            return ZPACK_ERROR_FILE_SIZE_INVALID;
-
-        // decompress the file
-        int ret = ZPACK_LZ4_DECOMPRESS((const char*)comp_data, (char*)buffer,
-                                       entry->comp_size, max_size);
-        reader->last_return = ret;
-        if (reader->file) free(comp_data);
-
-        // check for errors
-        if (ret <= 0)
-            return ZPACK_ERROR_DECOMPRESS_FAILED;
-
-        break;
-    #else
-        if (reader->file) free(comp_data);
-        return ZPACK_ERROR_NOT_AVAILABLE;
-    #endif
-    
-    case ZPACK_COMPRESSION_LZ4F:
-    #ifndef ZPACK_DISABLE_LZ4
     {
+        ZPACK_CHECK_DCTX_LZ4(dctx, reader);
         if (!dctx)
         {
-            if (!reader->lz4f_dctx)
-            {
-                LZ4F_createDecompressionContext((LZ4F_dctx**)&reader->lz4f_dctx, LZ4F_VERSION);
-                if (reader->lz4f_dctx == NULL)
-                    return ZPACK_ERROR_MALLOC_FAILED;
-            }
-            dctx = reader->lz4f_dctx;
+            if (reader->file) free(comp_data);
+            return ZPACK_ERROR_MALLOC_FAILED;
         }
         
         void* dst = buffer;
@@ -499,7 +478,7 @@ int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zp
     stream->avail_out -= size; \
     stream->total_out += size;
 
-int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream)
+int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, void* dctx)
 {
     if (entry->comp_size == 0 || stream->total_out >= entry->uncomp_size)
         return ZPACK_OK;
@@ -507,6 +486,10 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
     if (!stream->next_out || !stream->avail_out)
         return ZPACK_ERROR_STREAM_INVALID;
     
+    // reset xxh3 state at start
+    if (stream->total_in == 0)
+        XXH3_64bits_reset(stream->xxh3_state);
+
     zpack_u8* src = stream->next_in;
     size_t in_size = 0;
 
@@ -520,25 +503,14 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
     }
 
     // decompress it
-    void* dctx = stream->ctx;
     switch (entry->comp_method)
     {
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
     {
-        // create the decompression context if needed
-        if (!dctx)
-        {
-            if (!reader->zstd_dctx)
-            {
-                reader->zstd_dctx = ZSTD_createDCtx();
-                if (reader->zstd_dctx == NULL)
-                    return ZPACK_ERROR_MALLOC_FAILED;
-            }
-            dctx = reader->zstd_dctx;
-        }
-        
-        // and decompress the file
+        ZPACK_CHECK_DCTX_ZSTD(dctx, reader);
+        if (!dctx) return ZPACK_ERROR_MALLOC_FAILED;
+
         ZSTD_outBuffer out = { stream->next_out, stream->avail_out, 0 };
         ZSTD_inBuffer  in  = { src, in_size, 0 };
         while (in.pos < in.size)
@@ -550,7 +522,8 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
                 return ZPACK_ERROR_DECOMPRESS_FAILED;
             }
         }
-
+        
+        XXH3_64bits_update(stream->xxh3_state, stream->next_out, out.pos);
         ZPACK_ADVANCE_STREAM_OUT(stream, out.pos);
         break;
     }
@@ -558,51 +531,12 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
         if (reader->file) free(comp_data);
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
-    
+
     case ZPACK_COMPRESSION_LZ4:
     #ifndef ZPACK_DISABLE_LZ4
-        if (!dctx)
-        {
-            if (!reader->lz4_dstream)
-            {
-                reader->lz4_dstream = LZ4_createStreamDecode();
-                if (reader->lz4_dstream == NULL)
-                    return ZPACK_ERROR_MALLOC_FAILED;
-            }
-            dctx = reader->lz4_dstream;
-        }
-
-        if (in_size > INT_MAX || stream->avail_out > INT_MAX)
-            return ZPACK_ERROR_FILE_SIZE_INVALID;
-
-        int ret = LZ4_decompress_safe_continue(dctx, (const char*)src, (char*)stream->next_out,
-                                               in_size, stream->avail_out);
-        reader->last_return = ret;
-        if (ret <= 0)
-            return ZPACK_ERROR_DECOMPRESS_FAILED;
-
-        ZPACK_ADVANCE_STREAM_OUT(stream, ret);
-        break;
-    #else
-        if (reader->file) free(comp_data);
-        return ZPACK_ERROR_NOT_AVAILABLE;
-    #endif
-
-
-    case ZPACK_COMPRESSION_LZ4F:
-    #ifndef ZPACK_DISABLE_LZ4
     {
-        if (!stream->ctx)
-        {
-            if (!reader->lz4f_dctx)
-            {
-                LZ4F_createDecompressionContext((LZ4F_dctx**)&reader->lz4f_dctx, LZ4F_VERSION);
-                if (reader->lz4f_dctx == NULL)
-                    return ZPACK_ERROR_MALLOC_FAILED;
-            }
-            dctx = reader->lz4f_dctx;
-        }
-        else dctx = stream->ctx;
+        ZPACK_CHECK_DCTX_LZ4(dctx, reader);
+        if (!dctx) return ZPACK_ERROR_MALLOC_FAILED;
 
         size_t dst_size, src_size;
         zpack_u8* tmp_buffer = NULL;
@@ -622,6 +556,7 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
 
             if (dst_size)
             {
+                XXH3_64bits_update(stream->xxh3_state, stream->next_out, dst_size);
                 ZPACK_ADVANCE_STREAM_OUT(stream, dst_size);
             }
 
@@ -641,6 +576,16 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
     
+    default:
+        return ZPACK_ERROR_COMP_METHOD_INVALID;
+    }
+
+    if (stream->total_out == entry->uncomp_size)
+    {
+        // verify hash
+        zpack_u64 hash = XXH3_64bits_digest(stream->xxh3_state);
+        if (entry->hash != hash)
+            return ZPACK_ERROR_FILE_HASH_MISMATCH;
     }
 
     return ZPACK_OK;
@@ -704,33 +649,38 @@ void zpack_close_reader(zpack_reader* reader)
     memset(reader, 0, sizeof(zpack_reader));
 }
 
-size_t zpack_get_dstream_in_size(zpack_compression_method method)
+zpack_u32 zpack_get_dstream_in_size(zpack_compression_method method)
 {
     switch (method)
     {
+    #ifndef ZPACK_DISABLE_ZSTD
     case ZPACK_COMPRESSION_ZSTD:
         return ZSTD_DStreamInSize();
+    #endif
 
+    #ifndef ZPACK_DISABLE_LZ4
     case ZPACK_COMPRESSION_LZ4:
-    case ZPACK_COMPRESSION_LZ4F:
-        // just account for worst case scenario (128kb)
-        return (1<<17);
+        return LZ4F_compressBound(0, NULL);
+    #endif
 
+    default: return 0;
     }
-    return 0;
 };
 
-size_t zpack_get_dstream_out_size(zpack_compression_method method)
+zpack_u32 zpack_get_dstream_out_size(zpack_compression_method method)
 {
     switch (method)
     {
+    #ifndef ZPACK_DISABLE_ZSTD
     case ZPACK_COMPRESSION_ZSTD:
         return ZSTD_DStreamOutSize();
+    #endif
 
+    #ifndef ZPACK_DISABLE_LZ4
     case ZPACK_COMPRESSION_LZ4:
-    case ZPACK_COMPRESSION_LZ4F:
-        return (1<<17);
+        return (1 << 16); // 64kb
+    #endif
 
+    default: return 0;
     }
-    return 0;
 }
