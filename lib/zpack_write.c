@@ -429,6 +429,10 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
         {
         case ZPACK_COMPRESSION_ZSTD:
         {
+            // initial setup
+            if (stream->total_in == 0)
+                ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, options->level);
+
             ZSTD_outBuffer output = { stream->next_out, stream->avail_out, 0 };
             ZSTD_inBuffer input = { stream->next_in, stream->avail_in, read_pos };
             writer->last_return = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_continue);
@@ -448,7 +452,12 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
 
         case ZPACK_COMPRESSION_LZ4:
             if (stream->total_out == 0)
-                writer->last_return = LZ4F_compressBegin(cctx, stream->next_out, stream->avail_out, NULL);
+            {
+                LZ4F_preferences_t prefs;
+                memset(&prefs, 0, sizeof(LZ4F_preferences_t));
+                prefs.compressionLevel = options->level;
+                writer->last_return = LZ4F_compressBegin(cctx, stream->next_out, stream->avail_out, &prefs);
+            }
             else
             {
                 writer->last_return = LZ4F_compressUpdate(cctx, stream->next_out, stream->avail_out,
