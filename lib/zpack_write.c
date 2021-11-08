@@ -4,12 +4,21 @@
 #include <string.h>
 #include <xxhash.h>
 
+#ifndef ZPACK_DISABLE_ZSTD
+#include <zstd.h>
+#include <zstd_errors.h>
+#endif
+
+#ifndef ZPACK_DISABLE_LZ4
+#include <lz4frame.h>
+#endif
+
 #define ZPACK_ADD_OFFSET_AND_SIZE(writer, sz) \
     writer->write_offset += sz; \
     writer->file_size += sz
 
 #define ZPACK_CHECK_CCTX_ZSTD(cctx, writer) \
-    if (!cctx) \
+    if (!(cctx)) \
     { \
         if (!writer->zstd_cctx) \
             writer->zstd_cctx = ZSTD_createCCtx(); \
@@ -17,7 +26,7 @@
     }
 
 #define ZPACK_CHECK_CCTX_LZ4(cctx, writer) \
-    if (!cctx) \
+    if (!(cctx)) \
     { \
         if (!writer->lz4f_cctx) \
             LZ4F_createCompressionContext((LZ4F_cctx**)&writer->lz4f_cctx, LZ4F_VERSION); \
@@ -399,20 +408,39 @@ int zpack_write_files_from_archive(zpack_writer* writer, zpack_reader* reader, z
     return ZPACK_OK;
 }
 
-int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* options, zpack_stream* stream, void* cctx)
+static int zpack_check_cctx_stream(void** cctx, zpack_compression_method method, zpack_writer* writer)
 {
-    switch (options->method)
+    switch (method)
     {
     case ZPACK_COMPRESSION_ZSTD:
-        ZPACK_CHECK_CCTX_ZSTD(cctx, writer);
+    #ifndef ZPACK_DISABLE_ZSTD
+        ZPACK_CHECK_CCTX_ZSTD(*cctx, writer);
         break;
+    #else
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
     
     case ZPACK_COMPRESSION_LZ4:
-        ZPACK_CHECK_CCTX_LZ4(cctx, writer);
+    #ifndef ZPACK_DISABLE_LZ4
+        ZPACK_CHECK_CCTX_LZ4(*cctx, writer);
         break;
+    #else
+        return ZPACK_ERROR_NOT_AVAILABLE;
+    #endif
 
     }
-    if (!cctx) return ZPACK_ERROR_MALLOC_FAILED;
+    if (!(*cctx)) return ZPACK_ERROR_MALLOC_FAILED;
+    return ZPACK_OK;
+}
+
+int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* options, zpack_stream* stream, void* cctx)
+{
+    if (!stream->next_in || !stream->avail_in || !stream->next_out || !stream->avail_out)
+        return ZPACK_ERROR_STREAM_INVALID;
+
+    int ret;
+    if ((ret = zpack_check_cctx_stream(&cctx, options->method, writer)))
+        return ret;
 
     // calculate hash
     if (XXH3_64bits_update(stream->xxh3_state, stream->next_in, stream->avail_in) == XXH_ERROR)
@@ -421,13 +449,13 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
     // compress
     zpack_bool flushed = ZPACK_FALSE;
     size_t read_pos = 0;
-    int ret;
     while (!flushed)
     {
         size_t write_size = 0;
         switch (options->method)
         {
         case ZPACK_COMPRESSION_ZSTD:
+        #ifndef ZPACK_DISABLE_ZSTD
         {
             // initial setup
             if (stream->total_in == 0)
@@ -449,8 +477,12 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
             read_pos = input.pos;
             break;
         }
+        #else
+            return ZPACK_ERROR_NOT_AVAILABLE;
+        #endif
 
         case ZPACK_COMPRESSION_LZ4:
+        #ifndef ZPACK_DISABLE_LZ4
             if (stream->total_out == 0)
             {
                 LZ4F_preferences_t prefs;
@@ -474,6 +506,9 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
 
             write_size = writer->last_return;
             break;
+        #else
+            return ZPACK_ERROR_NOT_AVAILABLE;
+        #endif
 
         default:
             return ZPACK_ERROR_COMP_METHOD_INVALID;
@@ -511,27 +546,21 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
 
 int zpack_write_file_stream_end(zpack_writer* writer, char* filename, zpack_compress_options* options, zpack_stream* stream, void* cctx)
 {
-    switch (options->method)
-    {
-    case ZPACK_COMPRESSION_ZSTD:
-        ZPACK_CHECK_CCTX_ZSTD(cctx, writer);
-        break;
-    
-    case ZPACK_COMPRESSION_LZ4:
-        ZPACK_CHECK_CCTX_LZ4(cctx, writer);
-        break;
+    if (!stream->next_out || !stream->avail_out)
+        return ZPACK_ERROR_STREAM_INVALID;
 
-    }
-    if (!cctx) return ZPACK_ERROR_MALLOC_FAILED;
+    int ret;
+    if ((ret = zpack_check_cctx_stream(&cctx, options->method, writer)))
+        return ret;
 
     zpack_bool flushed = ZPACK_FALSE;
-    int ret;
     while (!flushed)
     {
         size_t write_size = 0;
         switch (options->method)
         {
         case ZPACK_COMPRESSION_ZSTD:
+        #ifndef ZPACK_DISABLE_ZSTD
         {
             ZSTD_outBuffer output = { stream->next_out, stream->avail_out, 0 };
             ZSTD_inBuffer input = { NULL, 0, 0 };
@@ -548,8 +577,12 @@ int zpack_write_file_stream_end(zpack_writer* writer, char* filename, zpack_comp
             write_size = output.pos;
             break;
         }
+        #else
+            return ZPACK_ERROR_NOT_AVAILABLE;
+        #endif
 
         case ZPACK_COMPRESSION_LZ4:
+        #ifndef ZPACK_DISABLE_LZ4
             writer->last_return = LZ4F_compressEnd(cctx, stream->next_out, stream->avail_out, NULL);
 
             if (LZ4F_isError(writer->last_return))
@@ -561,6 +594,9 @@ int zpack_write_file_stream_end(zpack_writer* writer, char* filename, zpack_comp
             flushed = ZPACK_TRUE; // always flushed 😳
             write_size = writer->last_return;
             break;
+        #else
+            return ZPACK_ERROR_NOT_AVAILABLE;
+        #endif
 
         default:
             return ZPACK_ERROR_COMP_METHOD_INVALID;

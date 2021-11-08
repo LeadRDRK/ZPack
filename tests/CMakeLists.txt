@@ -24,7 +24,6 @@ add_test(
 add_executable(write_archive write_archive.c)
 target_include_directories(write_archive PRIVATE ../lib)
 target_link_libraries(write_archive zpack)
-target_compile_definitions(write_archive PRIVATE ${ZPACK_LFS_DEFS})
 add_test(
     NAME write_archive
     WORKING_DIRECTORY ${ZPACK_TESTS_WORKDIR}

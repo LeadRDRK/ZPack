@@ -1,4 +1,5 @@
 #include "zpack_common.h"
+#include "zpack.h"
 #include <xxhash.h>
 #include <stdlib.h>
 

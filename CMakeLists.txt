@@ -35,7 +35,7 @@ endif()
 add_subdirectory(lib)
 
 if(ZPACK_BUILD_PROGRAMS)
-    #add_subdirectory(programs)
+    add_subdirectory(programs)
 endif()
 
 if(ZPACK_BUILD_TESTS)

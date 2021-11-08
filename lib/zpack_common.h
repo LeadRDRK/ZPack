@@ -2,17 +2,7 @@
 #define __ZPACK_COMMON_H__
 
 #include "zpack.h"
-#include "zpack_export.h"
 #include <stdio.h>
-
-#ifndef ZPACK_DISABLE_ZSTD
-#include <zstd.h>
-#include <zstd_errors.h>
-#endif
-
-#ifndef ZPACK_DISABLE_LZ4
-#include <lz4frame.h>
-#endif
 
 #define ZPACK_READ_LE8(p)  *((const zpack_u8 *)(p))
 

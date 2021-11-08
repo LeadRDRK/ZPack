@@ -5,6 +5,15 @@
 #include <limits.h>
 #include <xxhash.h>
 
+#ifndef ZPACK_DISABLE_ZSTD
+#include <zstd.h>
+#include <zstd_errors.h>
+#endif
+
+#ifndef ZPACK_DISABLE_LZ4
+#include <lz4frame.h>
+#endif
+
 #define ZPACK_CHECK_DCTX_ZSTD(dctx, reader) \
     if (!dctx) \
     { \
