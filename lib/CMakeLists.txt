@@ -85,6 +85,7 @@ add_library(zpack ${ZPACK_LIBRARY_TYPE}
     zpack_write.c
 
     zpack_common.h
+    zpack_export.h
     zpack.h
 )
 set_property(TARGET zpack PROPERTY C_STANDARD 99)

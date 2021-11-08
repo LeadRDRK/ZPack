@@ -1,8 +1,9 @@
 #include <zpack.h>
-#include <zpack_common.h>
 #include <stdlib.h>
 #include <string.h>
 #include "archive.h"
+
+#define MIN(a, b) ((a < b) ? a : b)
 
 static const char* _out_names[2] = {
     "out_zstd.zpk",
@@ -66,7 +67,7 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
 
         while (stream.total_in < files[i].size)
         {
-            stream.avail_in = ZPACK_MIN(STREAM_IN_SIZE, files[i].size - stream.total_in);
+            stream.avail_in = MIN(STREAM_IN_SIZE, files[i].size - stream.total_in);
 
             if ((ret = zpack_write_file_stream(writer, files[i].options, &stream, NULL)))
             {

@@ -5,16 +5,16 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "zpack_export.h"
+
 #define ZPACK_VERSION_MAJOR 2
 #define ZPACK_VERSION_MINOR 0
 #define ZPACK_VERSION_PATCH 0
 #define ZPACK_VERSION (ZPACK_VERSION_MAJOR * 100000 + ZPACK_VERSION_MINOR * 1000 + ZPACK_VERSION_PATCH * 10)
 #define ZPACK_VERSION_STRING "2.0.0"
-
-#include <stdio.h>
-#include <stdint.h>
-#include <stddef.h>
-#include "zpack_export.h"
 
 typedef uint8_t  zpack_u8;
 typedef uint16_t zpack_u16;
