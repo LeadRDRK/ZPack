@@ -4,15 +4,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void args_list_insert(char*** list, int* count, int* size, char* arg)
+static zpack_bool args_list_insert(char*** list, int* count, int* size, char* arg)
 {
     int num = (*count)++;
     if (*size < *count)
     {
         *size = utils_get_heap_size(*count);
         *list = (char**)realloc(*list, sizeof(char*) * (*size));
+        if (*list == NULL)
+        {
+            printf("Error: Failed to allocate memory\n");
+            return ZPACK_FALSE;
+        }
     }
     (*list)[num] = arg;
+    return ZPACK_TRUE;
 }
 
 zpack_bool args_parse(int argc, char** argv, args_options* options)
@@ -47,7 +53,6 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
                     int sep_pos = utils_find_index_of(method_str, ':');
                     if (sep_pos != -1)
                     {
-                        printf("%d\n", sep_pos);
                         char* level_str = method_str + sep_pos + 1;
                         char* end;
 
@@ -67,8 +72,9 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
                     break;
 
                 case 'x':
-                    args_list_insert(&options->exclude_list, &options->exclude_count,
-                                     &options->exclude_list_size, argv[++i]);
+                    if (!args_list_insert(&options->exclude_list, &options->exclude_count,
+                                          &options->exclude_list_size, argv[++i]))
+                        return ZPACK_FALSE;
                     break;
 
                 case 'h':
@@ -101,8 +107,9 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
             if (!options->command)
                 options->command = arg;
             else
-                args_list_insert(&options->path_list, &options->path_count,
-                                 &options->path_list_size, arg);
+                if (!args_list_insert(&options->path_list, &options->path_count,
+                                      &options->path_list_size, arg))
+                    return ZPACK_FALSE;
         }
     }
 

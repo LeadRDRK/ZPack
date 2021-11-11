@@ -276,20 +276,6 @@ int zpack_read_archive(zpack_reader* reader)
     return ZPACK_OK;
 }
 
-int zpack_get_file_entry(zpack_reader* reader, const char* filename, zpack_file_entry** entry)
-{
-    for (int i = 0; i < reader->file_count; ++i)
-    {
-        if (strcmp(reader->file_entries[i].filename, filename) == 0)
-        {
-            *entry = reader->file_entries + i;
-            return ZPACK_OK;
-        }
-    }
-
-    return ZPACK_ERROR_FILE_NOT_FOUND;
-}
-
 int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size)
 {
     // offset check
@@ -692,4 +678,15 @@ zpack_u32 zpack_get_dstream_out_size(zpack_compression_method method)
 
     default: return 0;
     }
+}
+
+zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count)
+{
+    for (int i = 0; i < file_count; ++i)
+    {
+        if (strcmp(file_entries[i].filename, filename) == 0)
+            return file_entries + i;
+    }
+
+    return NULL;
 }
