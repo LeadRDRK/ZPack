@@ -1,12 +1,22 @@
 #include "utils.h"
 #include "platform_defs.h"
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef PLATFORM_UNIX
-#include <sys/stat.h>
+#define PATH_SEPARATOR '/'
+#include <dirent.h>
 #elif defined(PLATFORM_WIN32)
+#define PATH_SEPARATOR '\\'
 #include <direct.h>
+#include <fileapi.h>
+// Avoid including windows.h
+typedef void *PVOID;
+typedef PVOID HANDLE;
+typedef HANDLE HWND;
+#include <winbase.h>
 #endif
 
 int utils_find_index_of(const char* str, char c)
@@ -17,6 +27,46 @@ int utils_find_index_of(const char* str, char c)
             return i;
     }
     return -1;
+}
+
+void utils_remove_trailing_separators(char* path)
+{
+    size_t len = strlen(path);
+    if (!len) return;
+
+    char* p = path + len - 1;
+    while (p != path)
+    {
+        if (*p != '/' && *p != '\\')
+        {
+            p[1] = '\0'; // terminate string at character
+            break;
+        }
+        --p;
+    }
+}
+
+char* utils_get_filename(char* path, int depth)
+{
+    char* p = path + strlen(path);
+    zpack_bool got_dir = ZPACK_FALSE;
+    while (p != path)
+    {
+        if (*p == '/' || *p == '\\')
+        {
+            if (got_dir)
+            {
+                if (depth == 0)
+                    return p + 1;
+                
+                --depth;
+                got_dir = ZPACK_FALSE;
+            }
+        }
+        else got_dir = ZPACK_TRUE;
+        --p;
+    }
+    return p;
 }
 
 zpack_bool utils_mkdir(const char* path)
@@ -36,12 +86,6 @@ zpack_bool utils_mkdir(const char* path)
 
     return ZPACK_TRUE;
 }
-
-#ifdef PLATFORM_UNIX
-#define PATH_SEPARATOR '/'
-#elif defined(PLATFORM_WIN32)
-#define PATH_SEPARATOR '\\'
-#endif
 
 zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
 {
@@ -77,6 +121,233 @@ zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
         utils_mkdir(tmp);
     
     return ZPACK_TRUE;
+}
+
+int utils_stat(const char* path, stat_t* buf)
+{
+#if defined(_MSC_VER)
+    return _stat64(path, buf);
+#elif defined(__MINGW32__) && defined (__MSVCRT__)
+    return _stati64(path, buf);
+#else
+    return stat(path, buf);
+#endif
+}
+
+zpack_bool utils_is_directory(stat_t* buf)
+{
+#if defined(_MSC_VER)
+    return (buf->st_mode & _S_IFDIR);
+#else
+    return S_ISDIR(buf->st_mode);
+#endif
+}
+
+#ifdef PLATFORM_WIN32
+zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
+{
+    size_t dir_length = strlen(dir_path);
+    // construct find pattern (path\*)
+    char find_path[dir_length + 3];
+    memcpy(find_path, dir_path, dir_length);
+    find_path[dir_length] = '\\';
+    find_path[dir_length + 1] = '*';
+    find_path[dir_length + 2] = '\0';
+
+    WIN32_FIND_DATAA entry;
+    HANDLE h_find;
+
+    h_find = FindFirstFileA(find_path, &entry);
+    if (h_find == INVALID_HANDLE_VALUE)
+    {
+        printf("Error: Failed to open directory \"%s\"\n", dir_path);
+        return ZPACK_FALSE;
+    }
+
+    do
+    {   
+        if (strcmp(entry.cFileName, "..") == 0 || strcmp(entry.cFileName, ".") == 0)
+            continue;
+
+        size_t fn_length = strlen(entry.cFileName);
+        char* path = (char*)malloc(sizeof(char) * (dir_length + fn_length + 2));
+
+        // concatenate path + separator + filename
+        memcpy(path, dir_path, dir_length);
+        path[dir_length] = PATH_SEPARATOR;
+        memcpy(path + dir_length + 1, entry.cFileName, fn_length + 1);
+
+        if (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        {
+            utils_get_directory_files(files, file_count, list_size, path, depth + 1);
+            free(path);
+        }
+        else
+        {
+            path_filename* entry;
+            if ((entry = utils_add_path_filename(files, file_count, list_size)) == NULL)
+            {
+                FindClose(h_find);
+                return ZPACK_FALSE;
+            }
+            
+            entry->path = path;
+            entry->filename = utils_get_filename(path, depth + 1);
+            entry->path_alloc = ZPACK_TRUE;
+        }
+    }
+    while (FindNextFileA(h_find, &entry));
+
+    FindClose(h_find);
+    return ZPACK_TRUE;
+}
+#elif defined(__linux__) || (PLATFORM_POSIX_VERSION >= 200112L)
+zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
+{
+    size_t dir_length = strlen(dir_path);
+    DIR* dir;
+    if (!(dir = opendir(dir_path)))
+    {
+        printf("Error: Failed to open directory \"%s\" (%s)\n", dir_path, strerror(errno));
+        return ZPACK_FALSE;
+    }
+
+    errno = 0;
+    struct dirent* entry;
+    while ((entry = readdir(dir)))
+    {
+        if (strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, ".") == 0)
+            continue;
+        
+        size_t fn_length = strlen(entry->d_name);
+        char* path = (char*)malloc(sizeof(char) * (dir_length + fn_length + 2));
+
+        // concatenate path + separator + filename
+        memcpy(path, dir_path, dir_length);
+        path[dir_length] = PATH_SEPARATOR;
+        memcpy(path + dir_length + 1, entry->d_name, fn_length + 1);
+
+        stat_t sb;
+        if (utils_stat(path, &sb))
+        {
+            printf("Error: Failed to stat \"%s\" (%s)\n", path, strerror(errno));
+            closedir(dir);
+            return ZPACK_FALSE;
+        }
+
+        if (utils_is_directory(&sb))
+        {
+            utils_get_directory_files(files, file_count, list_size, path, depth + 1);
+            free(path);
+        }
+        else
+        {
+            path_filename* entry;
+            if ((entry = utils_add_path_filename(files, file_count, list_size)) == NULL)
+            {
+                closedir(dir);
+                return ZPACK_FALSE;
+            }
+            
+            entry->path = path;
+            entry->filename = utils_get_filename(path, depth + 1);
+            entry->path_alloc = ZPACK_TRUE;
+        }
+    }
+    closedir(dir);
+
+    if (errno)
+    {
+        printf("Error: Failed to read directory \"%s\" (%s)\n", dir_path, strerror(errno));
+        return ZPACK_FALSE;
+    }
+
+    return ZPACK_TRUE;
+}
+#else
+zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
+{
+    printf("Warning: Ignoring directory \"%s\" (compiled without directory support)\n", path);
+    return ZPACK_TRUE;
+}
+#endif
+
+zpack_bool utils_prepare_file_list(char** paths, int path_count, path_filename** files, int* file_count)
+{
+    int list_size = 0;
+    for (int i = 0; i < path_count; ++i)
+    {
+        utils_remove_trailing_separators(paths[i]);
+        utils_convert_separators(paths[i]);
+        stat_t sb;
+        if (utils_stat(paths[i], &sb))
+        {
+            printf("Error: Failed to stat \"%s\" (%s)\n", paths[i], strerror(errno));
+            return ZPACK_FALSE;
+        }
+
+        if (utils_is_directory(&sb))
+        {
+            if (!utils_get_directory_files(files, file_count, &list_size, paths[i], 0))
+                return ZPACK_FALSE;
+        }
+        else
+        {
+            path_filename* entry;
+            if ((entry = utils_add_path_filename(files, file_count, &list_size)) == NULL)
+                return ZPACK_FALSE;
+
+            entry->path = paths[i];
+            entry->filename = utils_get_filename(paths[i], 0);
+            entry->path_alloc = ZPACK_FALSE;
+        }
+    }
+    return ZPACK_TRUE;
+}
+
+void utils_free_file_list(path_filename* files, int file_count)
+{
+    for (int i = 0; i < file_count; ++i)
+    {
+        if (files[i].path_alloc)
+            free(files[i].path);
+    }
+
+    free(files);
+}
+
+char* utils_get_full_path(char* full_path, const char* path)
+{
+#ifdef PLATFORM_UNIX
+    return realpath(path, full_path);
+#elif defined(PLATFORM_WIN32)
+    return _fullpath(full_path, path, PATH_MAX+1);
+#endif
+}
+
+void utils_get_tmp_path(const char* path, char* tmp_path)
+{
+    srand(time(NULL));
+
+    size_t path_len = strlen(path);
+    memcpy(tmp_path, path, path_len);
+    tmp_path[path_len] = '.';
+
+    for (;;)
+    {
+        // Generate 5 random chars from 0-9, a-z
+        for (int i = 1; i < 6; ++i)
+        {
+            int n = rand() % 36;
+            tmp_path[path_len + i] = ((n > 9) ? ('a' + n - 10) : ('0' + n));
+        }
+        tmp_path[path_len + 6] = '\0';
+
+        // Check if path does not exist
+        stat_t sb;
+        if (utils_stat(tmp_path, &sb))
+            break;
+    }
 }
 
 void utils_convert_separators(char* p)
@@ -120,7 +391,7 @@ void utils_process_path(const char* path, char* out)
             break;
 
         case '\\':
-            // Convert \ to _
+            // Convert \ to _ (to retain consistency)
             out[pos++] = '_';
             break;
 #endif
@@ -158,6 +429,22 @@ void utils_process_path(const char* path, char* out)
 
     // Terminate string
     out[pos] = '\0';
+}
+
+path_filename* utils_add_path_filename(path_filename** files, int* file_count, int* list_size)
+{
+    int num = (*file_count)++;
+    if (*list_size < *file_count)
+    {
+        *list_size = utils_get_heap_size(*file_count);
+        *files = (path_filename*)realloc(*files, sizeof(path_filename) * (*list_size));
+        if (*files == NULL)
+        {
+            printf("Error: Failed to allocate memory\n");
+            return NULL;
+        }
+    }
+    return *files + num;
 }
 
 int utils_get_heap_size(int n)

@@ -195,8 +195,6 @@ ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, 
 ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t* in_size);
 ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, void* dctx);
 
-ZPACK_EXPORT int zpack_get_file_entry(zpack_reader* reader, const char* filename, zpack_file_entry** entry);
-
 ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size);
 ZPACK_EXPORT int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size);
 ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
@@ -230,6 +228,7 @@ ZPACK_EXPORT zpack_u32 zpack_get_dstream_in_size(zpack_compression_method method
 ZPACK_EXPORT zpack_u32 zpack_get_dstream_out_size(zpack_compression_method method);
 ZPACK_EXPORT zpack_u32 zpack_get_cstream_in_size(zpack_compression_method method);
 ZPACK_EXPORT zpack_u32 zpack_get_cstream_out_size(zpack_compression_method method);
+ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
 
 #ifdef __cplusplus
 }
