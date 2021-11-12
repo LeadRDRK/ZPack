@@ -109,6 +109,7 @@ zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
         {
             got_sep = ZPACK_FALSE;
             // create dir
+            tmp[pos] = '\0';
             if (!utils_mkdir(tmp))
                 return ZPACK_FALSE;
         }
@@ -118,7 +119,11 @@ zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
     }
 
     if (!exclude_last)
-        utils_mkdir(tmp);
+    {
+        tmp[pos] = '\0';
+        if (!utils_mkdir(tmp))
+            return ZPACK_FALSE;
+    }
     
     return ZPACK_TRUE;
 }

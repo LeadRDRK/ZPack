@@ -28,7 +28,6 @@ int write_start(zpack_writer* writer, args_options* options, char* archive_path)
         printf("Error: Failed to open \"%s\" for writing (error %d)\n", archive_path, ret);
         return 1;
     }
-    printf("-- Creating archive: %s\n", archive_path);
 
     if ((ret = zpack_write_header(writer)))
     {
@@ -71,20 +70,13 @@ int write_files(zpack_writer* writer, args_options* options, zpack_compress_opti
     memset(&stream, 0, sizeof(stream));
     zpack_init_stream(&stream);
 
-    zpack_u8* in_buf = NULL;
-    zpack_u8* out_buf = NULL;
-
     zpack_u32 in_size = zpack_get_cstream_in_size(comp_options->method);
-    in_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * in_size);
-    if (in_buf == NULL)
-    {
-        printf("Error: Failed to allocate memory\n");
-        WRITE_ERROR(writer, &stream, in_buf, out_buf);
-    }
+    zpack_u8* in_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * in_size);
 
     zpack_u32 out_size = zpack_get_cstream_out_size(comp_options->method);
-    out_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * out_size);
-    if (out_buf == NULL)
+    zpack_u8* out_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * out_size);
+
+    if (in_buf == NULL || out_buf == NULL)
     {
         printf("Error: Failed to allocate memory\n");
         WRITE_ERROR(writer, &stream, in_buf, out_buf);
@@ -138,6 +130,7 @@ int write_files(zpack_writer* writer, args_options* options, zpack_compress_opti
                 else
                 {
                     printf("Error: Failed to read \"%s\"\n", files[i].path);
+                    ZPACK_FCLOSE(fp);
                     WRITE_ERROR(writer, &stream, in_buf, out_buf);
                 }
             }
@@ -149,6 +142,7 @@ int write_files(zpack_writer* writer, args_options* options, zpack_compress_opti
                 if ((ret = zpack_write_file_stream(writer, comp_options, &stream, NULL)))
                 {
                     printf("Error: Failed to compress \"%s\" (error %d)\n", files[i].filename, ret);
+                    ZPACK_FCLOSE(fp);
                     WRITE_ERROR(writer, &stream, in_buf, out_buf);
                 }
             }
@@ -197,6 +191,8 @@ int write_end(zpack_writer* writer, size_t orig_size)
 
 int command_create(args_options* options)
 {
+    printf("-- Creating archive: %s\n", options->path_list[0]);
+
     zpack_writer writer;
     memset(&writer, 0, sizeof(zpack_writer));
 
@@ -255,9 +251,7 @@ int command_add(args_options* options)
         return 1;
     }
 
-    size_t orig_size = 0;
-    for (zpack_u64 i = 0; i < reader.file_count; ++i)
-        orig_size += reader.file_entries[i].uncomp_size;
+    size_t orig_size = reader.uncomp_size;
     zpack_close_reader(&reader);
 
     // Write new files
@@ -284,18 +278,203 @@ int command_add(args_options* options)
     return 0;
 }
 
+int init_decompress_stream(zpack_stream* stream)
+{
+    zpack_init_stream(stream);
+
+    // Using Zstd stream sizes since it's larger and can also hold LZ4 data properly
+    stream->avail_in = zpack_get_dstream_in_size(ZPACK_COMPRESSION_ZSTD);
+    stream->next_in = (zpack_u8*)malloc(sizeof(zpack_u8) * stream->avail_in);
+
+    stream->avail_out = zpack_get_dstream_out_size(ZPACK_COMPRESSION_ZSTD);
+    stream->next_out = (zpack_u8*)malloc(sizeof(zpack_u8) * stream->avail_out);
+
+    if (stream->next_in == NULL || stream->next_out == NULL)
+    {
+        printf("Error: Failed to allocate memory\n");
+        free(stream->next_in);
+        free(stream->next_out);
+        return 1;
+    }
+
+    return 0;
+}
+
+int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* entry, const char* filename, const char* output)
+{
+    size_t output_length = output ? strlen(output) : 0;
+    size_t fn_length = strlen(filename);
+    char path[output_length + fn_length + 2];
+    if (output)
+    {
+        memcpy(path, output, output_length);
+        path[output_length] = '/';
+        memcpy(path + output_length + 1, filename, fn_length + 1);
+    }
+    else memcpy(path, filename, fn_length + 1);
+    utils_convert_separators(path);
+
+    if (!utils_mkdir_p(path, ZPACK_TRUE))
+    {
+        printf("Error: Failed to create output directory for \"%s\" (%s)\n", path, strerror(errno));
+        return 1;
+    }
+
+    FILE* fp = ZPACK_FOPEN(path, "wb");
+    if (fp == NULL)
+    {
+        printf("Failed to open \"%s\" for writing\n", path);
+        return 1;
+    }
+
+    zpack_u8* in_buf = stream->next_in;
+    zpack_u8* out_buf = stream->next_out;
+    zpack_u32 in_size = stream->avail_in;
+    zpack_u32 out_size = stream->avail_out;
+
+    // Reset stream
+    stream->total_out = 0;
+    stream->total_in = 0;
+
+    printf("  %s\n", entry->filename);
+    int ret;
+    for (;;)
+    {
+        if ((ret = zpack_read_file_stream(reader, entry, stream, NULL)))
+        {
+            printf("Error: Failed to extract \"%s\" (error %d)\n", entry->filename, ret);
+            ZPACK_FCLOSE(fp);
+            return 1;
+        }
+
+        size_t write_size = stream->next_out - out_buf;
+        if (ZPACK_FWRITE(out_buf, 1, write_size, fp) != write_size)
+        {
+            printf("Error: Failed to write data to \"%s\"", path);
+            ZPACK_FCLOSE(fp);
+            return 1;
+        }
+
+        // Reset buffers
+        // LZ4 might not decompress the entire buffer, in which case
+        // we need to copy what's left to continue decompressing.
+        // ZPack expects that data to be at the beginning of the next buffer.
+        if (stream->read_back)
+            memcpy(in_buf, stream->next_in - stream->read_back, stream->read_back);
+        stream->next_in = in_buf;
+        stream->avail_in = in_size;
+
+        stream->next_out = out_buf;
+        stream->avail_out = out_size;
+
+        if (stream->total_out == entry->uncomp_size) break;
+    }
+
+    ZPACK_FCLOSE(fp);
+    return 0;
+}
+
+static int extract_files_i(args_options* options, zpack_bool full_path)
+{
+    char* archive_path = options->path_list[0];
+    printf("-- Reading archive: %s\n", archive_path);
+
+    zpack_reader reader;
+    memset(&reader, 0, sizeof(zpack_reader));
+
+    int ret;
+    if ((ret = zpack_init_reader(&reader, archive_path)))
+    {
+        printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        return 1;
+    }
+    printf("-- Found %lu files\n", reader.file_count);
+
+    zpack_stream stream;
+    memset(&stream, 0, sizeof(zpack_stream));
+    if ((ret = init_decompress_stream(&stream)))
+        return ret;
+    zpack_u8* in_buf = stream.next_in;
+    zpack_u8* out_buf = stream.next_out;
+
+    printf("-- Extracting files...\n");
+    ret = 0;
+    zpack_file_entry* entry = reader.file_entries;
+    for (zpack_u64 i = 0; i < reader.file_count; ++i)
+    {
+        if (full_path)
+        {
+            char filename[strlen(entry->filename) + 1];
+            utils_process_path(entry->filename, filename);
+            ret = extract_file(&reader, &stream, entry, filename, options->output);
+        }
+        else ret = extract_file(&reader, &stream, entry, utils_get_filename(entry->filename, 0), options->output);
+
+        if (ret)
+        {
+            ret = 1;
+            break;
+        }
+        ++entry;
+    }
+
+    if (ret == 0) printf("-- Done.\n");
+    free(in_buf);
+    free(out_buf);
+    zpack_close_stream(&stream);
+    zpack_close_reader(&reader);
+    return ret;
+}
+
 int command_extract(args_options* options)
 {
-    return 0;
+    return extract_files_i(options, ZPACK_FALSE);
 }
 
 int command_extract_full(args_options* options)
 {
-    return 0;
+    return extract_files_i(options, ZPACK_TRUE);
 }
 
+#define PRINT_LIST_ROW(s1, s2, method, name) printf("%12lu %12lu %8s  %s\n", s1, s2, method, name)
+#define ROW_SEPARATOR "------------ ------------ --------  ------------------------\n"
 int command_list(args_options* options)
 {
+    char* archive_path = options->path_list[0];
+    printf("-- Reading archive: %s\n", archive_path);
+
+    zpack_reader reader;
+    memset(&reader, 0, sizeof(zpack_reader));
+
+    int ret;
+    if ((ret = zpack_init_reader(&reader, archive_path)))
+    {
+        printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        return 1;
+    }
+
+    printf("%12s %12s %8s  %s\n" ROW_SEPARATOR, "Size", "Compressed", "Method", "Name");
+    for (zpack_u64 i = 0; i < reader.file_count; ++i)
+    {
+        zpack_file_entry* entry = reader.file_entries + i;
+        char* method;
+        switch (entry->comp_method)
+        {
+        case ZPACK_COMPRESSION_ZSTD:
+            method = "zstd";
+            break;
+
+        case ZPACK_COMPRESSION_LZ4:
+            method = "lz4";
+            break;
+
+        }
+        PRINT_LIST_ROW(entry->uncomp_size, entry->comp_size, method, entry->filename);
+    }
+    printf(ROW_SEPARATOR "%12lu %12lu  %lu files\n",
+           reader.uncomp_size, reader.comp_size, reader.file_count);
+
+    zpack_close_reader(&reader);
     return 0;
 }
 

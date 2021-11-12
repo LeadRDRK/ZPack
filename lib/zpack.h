@@ -141,6 +141,8 @@ typedef struct zpack_stream_s
     zpack_u32 avail_out;
     size_t total_out;
 
+    zpack_u32 read_back;
+
     // xxHash
     void* xxh3_state;
 

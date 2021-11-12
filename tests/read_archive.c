@@ -31,7 +31,8 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
     // Streaming decompression
     printf("* Streaming\n");
     zpack_u8 in_buf[STREAM_IN_SIZE];
-    zpack_stream stream = { 0, 0, 0, 0, 0, 0, 0 };
+    zpack_stream stream;
+    memset(&stream, 0, sizeof(zpack_stream));
     if (zpack_init_stream(&stream))
     {
         printf("Failed to init stream\n");
