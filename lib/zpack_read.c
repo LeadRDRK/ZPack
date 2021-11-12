@@ -443,8 +443,8 @@ int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zp
     if (!stream->next_in || !stream->avail_in || (stream->total_in > entry->comp_size))
         return ZPACK_ERROR_STREAM_INVALID;
 
-    *in_size = ZPACK_MIN(stream->avail_in, entry->comp_size - stream->total_in);
-    if (*in_size == 0) return ZPACK_OK;
+    size_t read_size = ZPACK_MIN(stream->avail_in, entry->comp_size - stream->total_in);
+    if (read_size == 0) return ZPACK_OK;
     size_t offset = entry->offset + stream->total_in;
 
     // read the compressed data
@@ -453,17 +453,18 @@ int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zp
         if (ZPACK_FSEEK(reader->file, offset, SEEK_SET) != 0)
             return ZPACK_ERROR_SEEK_FAILED;
         
-        if (ZPACK_FREAD(stream->next_in, 1, *in_size, reader->file) != *in_size)
+        if (ZPACK_FREAD(stream->next_in, 1, read_size, reader->file) != read_size)
             return ZPACK_ERROR_READ_FAILED;
     }
     else if (reader->buffer)
-        memcpy(stream->next_in, reader->buffer + offset, *in_size);
+        memcpy(stream->next_in, reader->buffer + offset, read_size);
     else
         return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
     
-    stream->next_in  += *in_size;
-    stream->avail_in -= *in_size;
-    stream->total_in += *in_size;
+    stream->next_in  += read_size;
+    stream->avail_in -= read_size;
+    stream->total_in += read_size;
+    *in_size += read_size;
 
     return ZPACK_OK;
 }
@@ -485,14 +486,22 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
     if (stream->total_in == 0)
         XXH3_64bits_reset(stream->xxh3_state);
 
+    // set src/apply read back
     zpack_u8* src = stream->next_in;
-    size_t in_size = 0;
+    size_t in_size = stream->read_back;
+
+    if (stream->read_back)
+    {
+        stream->next_in += stream->read_back;
+        stream->avail_in -= stream->read_back;
+        stream->read_back = 0;
+    }
 
     // check if everything is already read
     int ret;
     if (stream->total_in < entry->comp_size)
     {
-        // then read the compressed file
+        // then read the compressed data
         if ((ret = zpack_read_raw_file_stream(reader, entry, stream, &in_size)))
             return ret;
     }
@@ -561,7 +570,10 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
                 in_size -= src_size;
             }
             else
-                return ZPACK_ERROR_DECOMPRESS_FAILED;
+            {
+                stream->read_back = in_size;
+                break;
+            }
         }
 
         break;
