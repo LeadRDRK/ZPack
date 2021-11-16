@@ -24,10 +24,12 @@ int utils_find_index_of(const char* str, char c);
 char* utils_get_filename(char* path, int depth);
 void utils_remove_trailing_separators(char* path);
 void utils_convert_separators(char* path);
+void utils_convert_separators_archive(char* path);
 void utils_process_path(const char* path, char* out);
 
 zpack_bool utils_mkdir(const char* path);
 zpack_bool utils_mkdir_p(const char* path, zpack_bool exclude_last);
+zpack_bool utils_move(const char* old, const char* new);
 int utils_stat(const char* path, stat_t* buf);
 zpack_bool utils_is_directory(stat_t* buf);
 zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth);

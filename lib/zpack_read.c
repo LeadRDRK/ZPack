@@ -517,18 +517,17 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
 
         ZSTD_outBuffer out = { stream->next_out, stream->avail_out, 0 };
         ZSTD_inBuffer  in  = { src, in_size, 0 };
-        while (in.pos < in.size)
+
+        reader->last_return = ZSTD_decompressStream(dctx, &out, &in);
+        if (ZSTD_isError(reader->last_return))
         {
-            reader->last_return = ZSTD_decompressStream(dctx, &out, &in);
-            if (ZSTD_isError(reader->last_return))
-            {
-                ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only);
-                return ZPACK_ERROR_DECOMPRESS_FAILED;
-            }
+            ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only);
+            return ZPACK_ERROR_DECOMPRESS_FAILED;
         }
-        
+
         XXH3_64bits_update(stream->xxh3_state, stream->next_out, out.pos);
         ZPACK_ADVANCE_STREAM_OUT(stream, out.pos);
+        stream->read_back = in.size - in.pos;
         break;
     }
     #else
@@ -544,38 +543,32 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
 
         size_t dst_size, src_size;
         zpack_u8* tmp_buffer = NULL;
-        while (in_size > 0)
+
+        dst_size = stream->avail_out;
+        src_size = in_size;
+
+        reader->last_return = LZ4F_decompress(dctx, stream->next_out, &dst_size,
+                                              src, &src_size, NULL);
+
+        if (LZ4F_isError(reader->last_return))
         {
-            dst_size = stream->avail_out;
-            src_size = in_size;
-
-            reader->last_return = LZ4F_decompress(dctx, stream->next_out, &dst_size,
-                                                  src, &src_size, NULL);
-
-            if (LZ4F_isError(reader->last_return))
-            {
-                LZ4F_resetDecompressionContext(dctx);
-                return ZPACK_ERROR_DECOMPRESS_FAILED;
-            }
-
-            if (dst_size)
-            {
-                XXH3_64bits_update(stream->xxh3_state, stream->next_out, dst_size);
-                ZPACK_ADVANCE_STREAM_OUT(stream, dst_size);
-            }
-
-            if (src_size)
-            {
-                src     += src_size;
-                in_size -= src_size;
-            }
-            else
-            {
-                stream->read_back = in_size;
-                break;
-            }
+            LZ4F_resetDecompressionContext(dctx);
+            return ZPACK_ERROR_DECOMPRESS_FAILED;
         }
 
+        if (dst_size)
+        {
+            XXH3_64bits_update(stream->xxh3_state, stream->next_out, dst_size);
+            ZPACK_ADVANCE_STREAM_OUT(stream, dst_size);
+        }
+
+        if (src_size)
+        {
+            src     += src_size;
+            in_size -= src_size;
+        }
+
+        stream->read_back = in_size;
         break;
     }
     #else

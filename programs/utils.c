@@ -128,6 +128,24 @@ zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
     return ZPACK_TRUE;
 }
 
+zpack_bool utils_move(const char* old, const char* new)
+{
+#ifdef PLATFORM_WIN32
+    return MoveFileExA(old, new, MOVEFILE_REPLACE_EXISTING);
+#else
+    // stdlib method
+    if (remove(new))
+    {
+        if (errno != ENOENT)
+            return ZPACK_FALSE;
+    }
+    if (rename(old, new))
+        return ZPACK_FALSE;
+
+    return ZPACK_TRUE;
+#endif
+}
+
 int utils_stat(const char* path, stat_t* buf)
 {
 #if defined(_MSC_VER)
@@ -256,6 +274,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
             
             entry->path = path;
             entry->filename = utils_get_filename(path, depth + 1);
+            utils_convert_separators_archive(entry->filename);
             entry->path_alloc = ZPACK_TRUE;
         }
     }
@@ -304,6 +323,7 @@ zpack_bool utils_prepare_file_list(char** paths, int path_count, path_filename**
 
             entry->path = paths[i];
             entry->filename = utils_get_filename(paths[i], 0);
+            utils_convert_separators_archive(entry->filename);
             entry->path_alloc = ZPACK_FALSE;
         }
     }
@@ -362,6 +382,18 @@ void utils_convert_separators(char* p)
     {
         if (*p == '/')
             *p = '\\';
+        ++p;
+    }
+#endif
+}
+
+void utils_convert_separators_archive(char* p)
+{
+#ifdef PLATFORM_WIN32
+    while (*p)
+    {
+        if (*p == '\\')
+            *p = '/';
         ++p;
     }
 #endif
