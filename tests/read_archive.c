@@ -48,6 +48,9 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
         int passes = 0;
         for (;;)
         {
+            if (stream.read_back)
+                memmove(in_buf, stream.next_in - stream.read_back, stream.read_back);
+
             stream.next_in = in_buf;
             stream.avail_in = STREAM_IN_SIZE;
             stream.avail_out = STREAM_OUT_SIZE;

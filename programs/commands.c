@@ -213,15 +213,12 @@ int command_create(args_options* options)
     return 0;
 }
 
-int command_add(args_options* options)
+int open_archive_rw(args_options* options, zpack_reader* reader, zpack_writer* writer, char* tmp_path)
 {
+    char* archive_path = options->path_list[0];
     int ret;
     // Open file in reader
-    zpack_reader reader;
-    memset(&reader, 0, sizeof(zpack_reader));
-
-    char* archive_path = options->path_list[0];
-    if ((ret = zpack_init_reader(&reader, archive_path)))
+    if ((ret = zpack_init_reader(reader, archive_path)))
     {
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
         return 1;
@@ -229,18 +226,35 @@ int command_add(args_options* options)
 
     // Generate temporary filename
     utils_remove_trailing_separators(archive_path);
-    char tmp_path[strlen(archive_path) + 7];
     utils_get_tmp_path(archive_path, tmp_path);
+
+    // Init writer/Write archive start (header + data signature)
+    if ((ret = write_start(writer, options, tmp_path)))
+    {
+        zpack_close_reader(reader);
+        zpack_close_writer(writer);
+        return ret;
+    }
+
+    return 0;
+}
+
+int command_add(args_options* options)
+{
+    int ret;
+
+    zpack_reader reader;
+    memset(&reader, 0, sizeof(zpack_reader));
 
     zpack_writer writer;
     memset(&writer, 0, sizeof(zpack_writer));
 
-    // Init writer/Write archive start (header + data signature)
-    if ((ret = write_start(&writer, options, tmp_path)))
-    {
-        zpack_close_reader(&reader);
+    char* archive_path = options->path_list[0];
+    char tmp_path[strlen(archive_path) + 7];
+
+    // Open archive in rw mode (original archive + temporary archive)
+    if ((ret = open_archive_rw(options, &reader, &writer, tmp_path)))
         return ret;
-    }
 
     // Write files from old archive
     if ((ret = zpack_write_files_from_archive(&writer, &reader, reader.file_entries, reader.file_count)))
@@ -263,15 +277,9 @@ int command_add(args_options* options)
         return ret;
     
     // Move file back to original path
-    if (remove(archive_path))
+    if (!utils_move(tmp_path, archive_path))
     {
-        printf("Error: Failed to remove old archive\n");
-        return 1;
-    }
-
-    if (rename(tmp_path, archive_path))
-    {
-        printf("Error: Failed to rename temporary archive\n");
+        printf("Error: Failed to move temporary archive back to original file\n");
         return 1;
     }
 
@@ -342,9 +350,14 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
     {
         if ((ret = zpack_read_file_stream(reader, entry, stream, NULL)))
         {
-            printf("Error: Failed to extract \"%s\" (error %d)\n", entry->filename, ret);
-            ZPACK_FCLOSE(fp);
-            return 1;
+            if (ret == ZPACK_ERROR_FILE_HASH_MISMATCH)
+                printf("Warning: File is corrupted (file hash mismatch)\n");
+            else
+            {
+                printf("Error: Failed to extract \"%s\" (error %d)\n", entry->filename, ret);
+                ZPACK_FCLOSE(fp);
+                return 1;
+            }
         }
 
         size_t write_size = stream->next_out - out_buf;
@@ -356,11 +369,11 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
         }
 
         // Reset buffers
-        // LZ4 might not decompress the entire buffer, in which case
+        // The input buffer might not be fully decompressed in one go, in which case
         // we need to copy what's left to continue decompressing.
         // ZPack expects that data to be at the beginning of the next buffer.
         if (stream->read_back)
-            memcpy(in_buf, stream->next_in - stream->read_back, stream->read_back);
+            memmove(in_buf, stream->next_in - stream->read_back, stream->read_back);
         stream->next_in = in_buf;
         stream->avail_in = in_size;
 
@@ -399,9 +412,20 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
 
     printf("-- Extracting files...\n");
     ret = 0;
-    zpack_file_entry* entry = reader.file_entries;
     for (zpack_u64 i = 0; i < reader.file_count; ++i)
     {
+        zpack_file_entry* entry = reader.file_entries + i;
+        zpack_bool exclude = ZPACK_FALSE;
+        for (int x = 0; x < options->exclude_count; ++x)
+        {
+            if (strcmp(options->exclude_list[x], entry->filename) == 0)
+            {
+                exclude = ZPACK_TRUE;
+                break;
+            }
+        }
+        if (exclude) continue;
+
         if (full_path)
         {
             char filename[strlen(entry->filename) + 1];
@@ -415,7 +439,6 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
             ret = 1;
             break;
         }
-        ++entry;
     }
 
     if (ret == 0) printf("-- Done.\n");
@@ -471,8 +494,8 @@ int command_list(args_options* options)
         }
         PRINT_LIST_ROW(entry->uncomp_size, entry->comp_size, method, entry->filename);
     }
-    printf(ROW_SEPARATOR "%12lu %12lu  %lu files\n",
-           reader.uncomp_size, reader.comp_size, reader.file_count);
+    printf(ROW_SEPARATOR "%12lu %12lu %8s  %lu files\n",
+           reader.uncomp_size, reader.comp_size, "", reader.file_count);
 
     zpack_close_reader(&reader);
     return 0;
@@ -480,15 +503,207 @@ int command_list(args_options* options)
 
 int command_delete(args_options* options)
 {
+    int ret;
+
+    zpack_reader reader;
+    memset(&reader, 0, sizeof(zpack_reader));
+
+    zpack_writer writer;
+    memset(&writer, 0, sizeof(zpack_writer));
+
+    char* archive_path = options->path_list[0];
+    char tmp_path[strlen(archive_path) + 7];
+
+    // Open archive in rw mode (original archive + temporary archive)
+    if ((ret = open_archive_rw(options, &reader, &writer, tmp_path)))
+        return ret;
+
+    // Write files from old archive, deleting specified files
+    printf("-- Deleting files...\n");
+    size_t orig_size = reader.uncomp_size;
+    zpack_bool file_deleted = ZPACK_FALSE;
+    for (zpack_u64 i = 0; i < reader.file_count; ++i)
+    {
+        zpack_bool delete = ZPACK_FALSE;
+        for (int x = 1; x < options->path_count; ++x)
+        {
+            if (strcmp(options->path_list[x], reader.file_entries[i].filename) == 0)
+            {
+                printf("  %s\n", options->path_list[x]);
+                delete = ZPACK_TRUE;
+                orig_size -= reader.file_entries[i].uncomp_size;
+                if (!file_deleted) file_deleted = ZPACK_TRUE;
+                break;
+            }
+        }
+        if (delete) continue;
+
+        if ((ret = zpack_write_files_from_archive(&writer, &reader, reader.file_entries + i, 1)))
+        {
+            printf("Error: Failed to copy data from archive (error %d)\n", ret);
+            zpack_close_reader(&reader);
+            zpack_close_writer(&writer);
+            return 1;
+        }
+    }
+
+    if (!file_deleted)
+        printf("Warning: No files were deleted\n");
+
+    zpack_close_reader(&reader);
+
+    // Write archive end (cdr + eocdr)
+    if ((ret = write_end(&writer, orig_size)))
+        return ret;
+
+    if (!utils_move(tmp_path, archive_path))
+    {
+        printf("Error: Failed to move temporary archive back to original file\n");
+        return 1;
+    }
     return 0;
 }
 
 int command_move(args_options* options)
 {
+    // File count check
+    if (options->path_count % 2 == 0)
+    {
+        printf("Error: Insufficient destination to source count\n");
+        return 1;
+    }
+
+    int ret;
+
+    zpack_reader reader;
+    memset(&reader, 0, sizeof(zpack_reader));
+
+    zpack_writer writer;
+    memset(&writer, 0, sizeof(zpack_writer));
+
+    char* archive_path = options->path_list[0];
+    char tmp_path[strlen(archive_path) + 7];
+
+    // Open archive in rw mode (original archive + temporary archive)
+    if ((ret = open_archive_rw(options, &reader, &writer, tmp_path)))
+        return ret;
+
+    // Write files from old archive, moving specified files
+    printf("-- Moving files...\n");
+    size_t orig_size = reader.uncomp_size;
+    zpack_bool file_moved = ZPACK_FALSE;
+    for (zpack_u64 i = 0; i < reader.file_count; ++i)
+    {
+        zpack_file_entry* entry = reader.file_entries + i;
+        zpack_bool moved = ZPACK_FALSE;
+        for (int x = 1; x < options->path_count; x += 2)
+        {
+            if (strcmp(options->path_list[x], entry->filename) == 0)
+            {
+                printf("  %s -> %s\n", options->path_list[x], options->path_list[x + 1]);
+                // free the original filename
+                free(entry->filename);
+                entry->filename = options->path_list[x + 1];
+
+                moved = ZPACK_TRUE;
+                if (!file_moved) file_moved = ZPACK_TRUE;
+                break;
+            }
+        }
+
+        if ((ret = zpack_write_files_from_archive(&writer, &reader, entry, 1)))
+        {
+            printf("Error: Failed to copy data from archive (error %d)\n", ret);
+            zpack_close_reader(&reader);
+            zpack_close_writer(&writer);
+            return 1;
+        }
+
+        if (moved) entry->filename = NULL;
+    }
+
+    if (!file_moved)
+        printf("Warning: No files were moved\n");
+
+    zpack_close_reader(&reader);
+
+    // Write archive end (cdr + eocdr)
+    if ((ret = write_end(&writer, orig_size)))
+        return ret;
+
+    if (!utils_move(tmp_path, archive_path))
+    {
+        printf("Error: Failed to move temporary archive back to original file\n");
+        return 1;
+    }
     return 0;
 }
 
 int command_test(args_options* options)
 {
+    char* archive_path = options->path_list[0];
+    printf("-- Reading archive: %s\n", archive_path);
+
+    zpack_reader reader;
+    memset(&reader, 0, sizeof(zpack_reader));
+
+    int ret;
+    if ((ret = zpack_init_reader(&reader, archive_path)))
+    {
+        printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        return 1;
+    }
+    printf("-- Found %lu files\n", reader.file_count);
+
+    zpack_stream stream;
+    memset(&stream, 0, sizeof(zpack_stream));
+    if ((ret = init_decompress_stream(&stream)))
+        return ret;
+    zpack_u8* in_buf = stream.next_in;
+    zpack_u8* out_buf = stream.next_out;
+    zpack_u32 in_size = stream.avail_in;
+    zpack_u32 out_size = stream.avail_out;
+
+    printf("-- Testing files...\n");
+    zpack_u64 corrupt_count = 0;
+    for (zpack_u64 i = 0; i < reader.file_count; ++i)
+    {
+        zpack_file_entry* entry = reader.file_entries + i;
+        printf("  %s\n", entry->filename);
+
+        // Reset stream
+        stream.total_out = 0;
+        stream.total_in = 0;
+        for (;;)
+        {
+            if ((ret = zpack_read_file_stream(&reader, entry, &stream, NULL)))
+            {
+                if (ret == ZPACK_ERROR_FILE_HASH_MISMATCH)
+                {
+                    printf("-- File is corrupted!\n");
+                    ++corrupt_count;
+                    break;
+                }
+                
+                printf("Error: Failed to decompress \"%s\" (error %d)\n", entry->filename, ret);
+                zpack_close_reader(&reader);
+                return 1;
+            }
+
+            if (stream.read_back)
+                memmove(in_buf, stream.next_in - stream.read_back, stream.read_back);
+            stream.next_in = in_buf;
+            stream.avail_in = in_size;
+
+            stream.next_out = out_buf;
+            stream.avail_out = out_size;
+
+            if (stream.total_out == entry->uncomp_size) break;
+        }
+    }
+
+    printf("-- Done.\n"
+           "-- Corrupted files: %lu/%lu\n", corrupt_count, reader.file_count);
+    zpack_close_reader(&reader);
     return 0;
 }
