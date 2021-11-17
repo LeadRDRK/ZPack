@@ -70,10 +70,10 @@ int write_files(zpack_writer* writer, args_options* options, zpack_compress_opti
     memset(&stream, 0, sizeof(stream));
     zpack_init_stream(&stream);
 
-    zpack_u32 in_size = zpack_get_cstream_in_size(comp_options->method);
+    size_t in_size = zpack_get_cstream_in_size(comp_options->method);
     zpack_u8* in_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * in_size);
 
-    zpack_u32 out_size = zpack_get_cstream_out_size(comp_options->method);
+    size_t out_size = zpack_get_cstream_out_size(comp_options->method);
     zpack_u8* out_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * out_size);
 
     if (in_buf == NULL || out_buf == NULL)
@@ -181,7 +181,7 @@ int write_end(zpack_writer* writer, size_t orig_size)
     }
 
     printf("-- Done.\n"
-           "-- Archive size: %lu bytes\n"
+           "-- Archive size: %llu bytes\n"
            "-- Compression ratio: %f%%\n",
            writer->file_size, ((float)writer->file_size / orig_size) * 100);
     zpack_close_writer(writer);
@@ -250,7 +250,7 @@ int command_add(args_options* options)
     memset(&writer, 0, sizeof(zpack_writer));
 
     char* archive_path = options->path_list[0];
-    char tmp_path[strlen(archive_path) + 7];
+    char* tmp_path = (char*)malloc(sizeof(char) * (strlen(archive_path) + 7));
 
     // Open archive in rw mode (original archive + temporary archive)
     if ((ret = open_archive_rw(options, &reader, &writer, tmp_path)))
@@ -262,6 +262,7 @@ int command_add(args_options* options)
         printf("Error: Failed to copy data from archive (error %d)\n", ret);
         zpack_close_reader(&reader);
         zpack_close_writer(&writer);
+		free(tmp_path);
         return 1;
     }
 
@@ -270,14 +271,22 @@ int command_add(args_options* options)
 
     // Write new files
     if ((ret = write_files(&writer, options, &options->comp_options, &orig_size)))
+	{
+		free(tmp_path);
         return ret;
+	}
 
     // Write archive end (cdr + eocdr)
     if ((ret = write_end(&writer, orig_size)))
+	{
+		free(tmp_path);
         return ret;
+	}
     
     // Move file back to original path
-    if (!utils_move(tmp_path, archive_path))
+	ret = utils_move(tmp_path, archive_path);
+	free(tmp_path);
+    if (!ret)
     {
         printf("Error: Failed to move temporary archive back to original file\n");
         return 1;
@@ -312,7 +321,7 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
 {
     size_t output_length = output ? strlen(output) : 0;
     size_t fn_length = strlen(filename);
-    char path[output_length + fn_length + 2];
+    char* path = (char*)malloc(sizeof(char) * (output_length + fn_length + 2));
     if (output)
     {
         memcpy(path, output, output_length);
@@ -324,7 +333,9 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
 
     if (!utils_mkdir_p(path, ZPACK_TRUE))
     {
-        printf("Error: Failed to create output directory for \"%s\" (%s)\n", path, strerror(errno));
+        printf("Error: Failed to create output directory for \"%s\"", path);
+		utils_print_strerror();
+		free(path);
         return 1;
     }
 
@@ -332,13 +343,14 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
     if (fp == NULL)
     {
         printf("Failed to open \"%s\" for writing\n", path);
+		free(path);
         return 1;
     }
 
     zpack_u8* in_buf = stream->next_in;
     zpack_u8* out_buf = stream->next_out;
-    zpack_u32 in_size = stream->avail_in;
-    zpack_u32 out_size = stream->avail_out;
+    size_t in_size = stream->avail_in;
+    size_t out_size = stream->avail_out;
 
     // Reset stream
     stream->total_out = 0;
@@ -364,6 +376,7 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
         if (ZPACK_FWRITE(out_buf, 1, write_size, fp) != write_size)
         {
             printf("Error: Failed to write data to \"%s\"", path);
+			free(path);
             ZPACK_FCLOSE(fp);
             return 1;
         }
@@ -382,7 +395,8 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
 
         if (stream->total_out == entry->uncomp_size) break;
     }
-
+	
+	free(path);
     ZPACK_FCLOSE(fp);
     return 0;
 }
@@ -401,7 +415,7 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
         return 1;
     }
-    printf("-- Found %lu files\n", reader.file_count);
+    printf("-- Found %llu files\n", reader.file_count);
 
     zpack_stream stream;
     memset(&stream, 0, sizeof(zpack_stream));
@@ -412,6 +426,8 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
 
     printf("-- Extracting files...\n");
     ret = 0;
+	char* fn_buf = NULL;
+	zpack_u32 fn_buf_size = 0;
     for (zpack_u64 i = 0; i < reader.file_count; ++i)
     {
         zpack_file_entry* entry = reader.file_entries + i;
@@ -428,9 +444,14 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
 
         if (full_path)
         {
-            char filename[strlen(entry->filename) + 1];
-            utils_process_path(entry->filename, filename);
-            ret = extract_file(&reader, &stream, entry, filename, options->output);
+			zpack_u32 size = (zpack_u32)strlen(entry->filename) + 1;
+			if (fn_buf_size < size)
+			{
+				fn_buf = (char*)realloc(fn_buf, sizeof(char) * size);
+				fn_buf_size = size;
+			}
+            utils_process_path(entry->filename, fn_buf);
+            ret = extract_file(&reader, &stream, entry, fn_buf, options->output);
         }
         else ret = extract_file(&reader, &stream, entry, utils_get_filename(entry->filename, 0), options->output);
 
@@ -442,6 +463,7 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
     }
 
     if (ret == 0) printf("-- Done.\n");
+	free(fn_buf);
     free(in_buf);
     free(out_buf);
     zpack_close_stream(&stream);
@@ -459,7 +481,7 @@ int command_extract_full(args_options* options)
     return extract_files_i(options, ZPACK_TRUE);
 }
 
-#define PRINT_LIST_ROW(s1, s2, method, name) printf("%12lu %12lu %8s  %s\n", s1, s2, method, name)
+#define PRINT_LIST_ROW(s1, s2, method, name) printf("%12llu %12llu %8s  %s\n", s1, s2, method, name)
 #define ROW_SEPARATOR "------------ ------------ --------  ------------------------\n"
 int command_list(args_options* options)
 {
@@ -494,7 +516,7 @@ int command_list(args_options* options)
         }
         PRINT_LIST_ROW(entry->uncomp_size, entry->comp_size, method, entry->filename);
     }
-    printf(ROW_SEPARATOR "%12lu %12lu %8s  %lu files\n",
+    printf(ROW_SEPARATOR "%12llu %12llu %8s  %llu files\n",
            reader.uncomp_size, reader.comp_size, "", reader.file_count);
 
     zpack_close_reader(&reader);
@@ -512,11 +534,14 @@ int command_delete(args_options* options)
     memset(&writer, 0, sizeof(zpack_writer));
 
     char* archive_path = options->path_list[0];
-    char tmp_path[strlen(archive_path) + 7];
+    char* tmp_path = (char*)malloc(sizeof(char) * (strlen(archive_path) + 7));
 
     // Open archive in rw mode (original archive + temporary archive)
     if ((ret = open_archive_rw(options, &reader, &writer, tmp_path)))
+	{
+		free(tmp_path);
         return ret;
+	}
 
     // Write files from old archive, deleting specified files
     printf("-- Deleting files...\n");
@@ -541,6 +566,7 @@ int command_delete(args_options* options)
         if ((ret = zpack_write_files_from_archive(&writer, &reader, reader.file_entries + i, 1)))
         {
             printf("Error: Failed to copy data from archive (error %d)\n", ret);
+			free(tmp_path);
             zpack_close_reader(&reader);
             zpack_close_writer(&writer);
             return 1;
@@ -554,9 +580,14 @@ int command_delete(args_options* options)
 
     // Write archive end (cdr + eocdr)
     if ((ret = write_end(&writer, orig_size)))
+	{
+		free(tmp_path);
         return ret;
+	}
 
-    if (!utils_move(tmp_path, archive_path))
+	ret = utils_move(tmp_path, archive_path);
+	free(tmp_path);
+    if (!ret)
     {
         printf("Error: Failed to move temporary archive back to original file\n");
         return 1;
@@ -582,11 +613,14 @@ int command_move(args_options* options)
     memset(&writer, 0, sizeof(zpack_writer));
 
     char* archive_path = options->path_list[0];
-    char tmp_path[strlen(archive_path) + 7];
+    char* tmp_path = (char*)malloc(sizeof(char) * (strlen(archive_path) + 7));
 
     // Open archive in rw mode (original archive + temporary archive)
     if ((ret = open_archive_rw(options, &reader, &writer, tmp_path)))
+    {
+		free(tmp_path);
         return ret;
+	}
 
     // Write files from old archive, moving specified files
     printf("-- Moving files...\n");
@@ -614,6 +648,7 @@ int command_move(args_options* options)
         if ((ret = zpack_write_files_from_archive(&writer, &reader, entry, 1)))
         {
             printf("Error: Failed to copy data from archive (error %d)\n", ret);
+			free(tmp_path);
             zpack_close_reader(&reader);
             zpack_close_writer(&writer);
             return 1;
@@ -629,9 +664,14 @@ int command_move(args_options* options)
 
     // Write archive end (cdr + eocdr)
     if ((ret = write_end(&writer, orig_size)))
+	{
+		free(tmp_path);
         return ret;
+	}
 
-    if (!utils_move(tmp_path, archive_path))
+    ret = utils_move(tmp_path, archive_path);
+	free(tmp_path);
+    if (!ret)
     {
         printf("Error: Failed to move temporary archive back to original file\n");
         return 1;
@@ -653,7 +693,7 @@ int command_test(args_options* options)
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
         return 1;
     }
-    printf("-- Found %lu files\n", reader.file_count);
+    printf("-- Found %llu files\n", reader.file_count);
 
     zpack_stream stream;
     memset(&stream, 0, sizeof(zpack_stream));
@@ -661,8 +701,8 @@ int command_test(args_options* options)
         return ret;
     zpack_u8* in_buf = stream.next_in;
     zpack_u8* out_buf = stream.next_out;
-    zpack_u32 in_size = stream.avail_in;
-    zpack_u32 out_size = stream.avail_out;
+    size_t in_size = stream.avail_in;
+    size_t out_size = stream.avail_out;
 
     printf("-- Testing files...\n");
     zpack_u64 corrupt_count = 0;
@@ -703,7 +743,7 @@ int command_test(args_options* options)
     }
 
     printf("-- Done.\n"
-           "-- Corrupted files: %lu/%lu\n", corrupt_count, reader.file_count);
+           "-- Corrupted files: %llu/%llu\n", corrupt_count, reader.file_count);
     zpack_close_reader(&reader);
     return 0;
 }

@@ -45,10 +45,10 @@ int zpack_seek_and_write(FILE* fp, size_t offset, const zpack_u8* buffer, size_t
     return ZPACK_OK;
 }
 
-int zpack_get_heap_size(int n)
+zpack_u64 zpack_get_heap_size(zpack_u64 n)
 {
     // get closest power of 2 that can hold n bytes
-    int b = 1;
+    zpack_u64 b = 1;
     while (b < n)
         b = b << 1;
     return b;

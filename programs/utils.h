@@ -42,4 +42,6 @@ path_filename* utils_add_path_filename(path_filename** files, int* file_count, i
 
 int utils_get_heap_size(int n);
 
+void utils_print_strerror();
+
 #endif // __CLI_UTILS_H__
