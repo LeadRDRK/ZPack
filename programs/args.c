@@ -31,7 +31,7 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
         char* arg = argv[i];
         if (arg[0] == '-')
         {
-            int len = strlen(arg);
+            size_t len = strlen(arg);
 
             if (len == 2)
             {

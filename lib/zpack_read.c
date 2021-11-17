@@ -365,8 +365,8 @@ int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buf
             return ZPACK_ERROR_MALLOC_FAILED;
         }
         
-        void* dst = buffer;
-        const void* src = comp_data;
+        char* dst = buffer;
+        const char* src = comp_data;
 
         size_t avail_out = max_size;
         size_t avail_in  = entry->comp_size;
@@ -649,7 +649,7 @@ void zpack_close_reader(zpack_reader* reader)
     memset(reader, 0, sizeof(zpack_reader));
 }
 
-zpack_u32 zpack_get_dstream_in_size(zpack_compression_method method)
+size_t zpack_get_dstream_in_size(zpack_compression_method method)
 {
     switch (method)
     {
@@ -667,7 +667,7 @@ zpack_u32 zpack_get_dstream_in_size(zpack_compression_method method)
     }
 };
 
-zpack_u32 zpack_get_dstream_out_size(zpack_compression_method method)
+size_t zpack_get_dstream_out_size(zpack_compression_method method)
 {
     switch (method)
     {

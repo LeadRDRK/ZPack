@@ -49,7 +49,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    int command_len = strlen(options.command);
+    size_t command_len = strlen(options.command);
     int ret;
     if (command_len > 1)
     {

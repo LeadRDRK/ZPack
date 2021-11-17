@@ -682,10 +682,16 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
 {
     // calculate block size
     zpack_u64 block_size = file_count * ZPACK_FILE_ENTRY_FIXED_SIZE;
-    zpack_u16 fn_lengths[file_count];
+    zpack_u16* fn_lengths = (zpack_u16*)malloc(sizeof(zpack_u16) * file_count);
     for (zpack_u64 i = 0; i < file_count; ++i)
     {
-        fn_lengths[i] = strlen(entries[i].filename);
+		size_t length = strlen(entries[i].filename);
+		if (length > ZPACK_MAX_FILENAME_LENGTH)
+		{
+			free(fn_lengths);
+			return ZPACK_ERROR_FILENAME_TOO_LONG;
+		}
+        fn_lengths[i] = (zpack_u16)length;
         block_size += fn_lengths[i];
     }
     zpack_u64 size = ZPACK_CDR_HEADER_SIZE + block_size;
@@ -700,6 +706,7 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
         if ((ret = zpack_seek_and_write(writer->file, writer->write_offset, buffer, size)))
         {
             free(buffer);
+			free(fn_lengths);
             return ret;
         }
 
@@ -710,7 +717,10 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
         int ret;
         if ((ret = zpack_check_and_grow_heap(&writer->buffer, &writer->buffer_capacity,
                                              writer->file_size + size)))
+		{
+			free(fn_lengths);
             return ret;
+		}
         
         zpack_write_cdr_memory(writer->buffer + writer->write_offset, entries, file_count,
                                fn_lengths, block_size);
@@ -718,6 +728,7 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
     else
         return ZPACK_ERROR_WRITER_NOT_OPENED;
     
+	free(fn_lengths);
     writer->cdr_offset = writer->write_offset;
     ZPACK_ADD_OFFSET_AND_SIZE(writer, size);
     return ZPACK_OK;
@@ -803,7 +814,7 @@ void zpack_close_writer(zpack_writer* writer)
     memset(writer, 0, sizeof(zpack_writer));
 }
 
-zpack_u32 zpack_get_cstream_in_size(zpack_compression_method method)
+size_t zpack_get_cstream_in_size(zpack_compression_method method)
 {
     switch (method)
     {
@@ -821,7 +832,7 @@ zpack_u32 zpack_get_cstream_in_size(zpack_compression_method method)
     }
 }
 
-zpack_u32 zpack_get_cstream_out_size(zpack_compression_method method)
+size_t zpack_get_cstream_out_size(zpack_compression_method method)
 {
     switch (method)
     {

@@ -37,6 +37,8 @@ typedef zpack_u8 zpack_bool;
 #define ZPACK_FILE_ENTRY_FIXED_SIZE 35 // size of fixed fields in file entry
 #define ZPACK_EOCDR_SIZE 12
 
+#define ZPACK_MAX_FILENAME_LENGTH 65535
+
 // archive versions supported
 #define ZPACK_ARCHIVE_VERSION_MIN 1
 #define ZPACK_ARCHIVE_VERSION_MAX 1
@@ -134,14 +136,14 @@ typedef struct zpack_writer_s
 typedef struct zpack_stream_s
 {
     zpack_u8* next_in;
-    zpack_u32 avail_in;
+    size_t avail_in;
     size_t total_in;
 
     zpack_u8* next_out;
-    zpack_u32 avail_out;
+    size_t avail_out;
     size_t total_out;
 
-    zpack_u32 read_back;
+    size_t read_back;
 
     // xxHash
     void* xxh3_state;
@@ -173,6 +175,7 @@ enum zpack_result
     ZPACK_ERROR_WRITE_FAILED,         // Failed to write data to file
     ZPACK_ERROR_STREAM_INVALID,       // Invalid stream
     ZPACK_ERROR_HASH_FAILED,          // Failed to generate hash for the data provided
+	ZPACK_ERROR_FILENAME_TOO_LONG,    // Filename length exceeds limit (65535 characters)
     ZPACK_ERROR_NOT_AVAILABLE         // Feature not available in this build of ZPack (compression method disabled, etc.)
 
 };
@@ -226,10 +229,10 @@ ZPACK_EXPORT int zpack_init_stream(zpack_stream* stream);
 ZPACK_EXPORT void zpack_close_stream(zpack_stream* stream);
 
 // Utils
-ZPACK_EXPORT zpack_u32 zpack_get_dstream_in_size(zpack_compression_method method);
-ZPACK_EXPORT zpack_u32 zpack_get_dstream_out_size(zpack_compression_method method);
-ZPACK_EXPORT zpack_u32 zpack_get_cstream_in_size(zpack_compression_method method);
-ZPACK_EXPORT zpack_u32 zpack_get_cstream_out_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_dstream_in_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_dstream_out_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
+ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
 ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
 
 #ifdef __cplusplus

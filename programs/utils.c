@@ -10,13 +10,9 @@
 #include <dirent.h>
 #elif defined(PLATFORM_WIN32)
 #define PATH_SEPARATOR '\\'
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <direct.h>
-#include <fileapi.h>
-// Avoid including windows.h
-typedef void *PVOID;
-typedef PVOID HANDLE;
-typedef HANDLE HWND;
-#include <winbase.h>
 #endif
 
 int utils_find_index_of(const char* str, char c)
@@ -89,7 +85,7 @@ zpack_bool utils_mkdir(const char* path)
 
 zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
 {
-    char tmp[strlen(p) + 1];
+    char* tmp = (char*)malloc(sizeof(char) * (strlen(p) + 1));
     int pos = 0;
     zpack_bool got_sep = ZPACK_FALSE;
 
@@ -111,7 +107,10 @@ zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
             // create dir
             tmp[pos] = '\0';
             if (!utils_mkdir(tmp))
+			{
+				free(tmp);
                 return ZPACK_FALSE;
+			}
         }
 
         tmp[pos++] = *p;
@@ -122,9 +121,13 @@ zpack_bool utils_mkdir_p(const char* p, zpack_bool exclude_last)
     {
         tmp[pos] = '\0';
         if (!utils_mkdir(tmp))
+		{
+			free(tmp);
             return ZPACK_FALSE;
+		}
     }
     
+	free(tmp);
     return ZPACK_TRUE;
 }
 
@@ -171,7 +174,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
 {
     size_t dir_length = strlen(dir_path);
     // construct find pattern (path\*)
-    char find_path[dir_length + 3];
+    char* find_path = (char*)malloc(sizeof(char) * (dir_length + 3));
     memcpy(find_path, dir_path, dir_length);
     find_path[dir_length] = '\\';
     find_path[dir_length + 1] = '*';
@@ -184,6 +187,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
     if (h_find == INVALID_HANDLE_VALUE)
     {
         printf("Error: Failed to open directory \"%s\"\n", dir_path);
+		free(find_path);
         return ZPACK_FALSE;
     }
 
@@ -211,6 +215,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
             if ((entry = utils_add_path_filename(files, file_count, list_size)) == NULL)
             {
                 FindClose(h_find);
+				free(find_path);
                 return ZPACK_FALSE;
             }
             
@@ -222,6 +227,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
     while (FindNextFileA(h_find, &entry));
 
     FindClose(h_find);
+	free(find_path);
     return ZPACK_TRUE;
 }
 #elif defined(__linux__) || (PLATFORM_POSIX_VERSION >= 200112L)
@@ -231,7 +237,8 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
     DIR* dir;
     if (!(dir = opendir(dir_path)))
     {
-        printf("Error: Failed to open directory \"%s\" (%s)\n", dir_path, strerror(errno));
+        printf("Error: Failed to open directory \"%s\"", dir_path);
+		utils_print_strerror();
         return ZPACK_FALSE;
     }
 
@@ -253,7 +260,8 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
         stat_t sb;
         if (utils_stat(path, &sb))
         {
-            printf("Error: Failed to stat \"%s\" (%s)\n", path, strerror(errno));
+            printf("Error: Failed to stat \"%s\"", path);
+			utils_print_strerror();
             closedir(dir);
             return ZPACK_FALSE;
         }
@@ -282,7 +290,8 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
 
     if (errno)
     {
-        printf("Error: Failed to read directory \"%s\" (%s)\n", dir_path, strerror(errno));
+        printf("Error: Failed to read directory \"%s\"", dir_path);
+		utils_print_strerror();
         return ZPACK_FALSE;
     }
 
@@ -306,7 +315,8 @@ zpack_bool utils_prepare_file_list(char** paths, int path_count, path_filename**
         stat_t sb;
         if (utils_stat(paths[i], &sb))
         {
-            printf("Error: Failed to stat \"%s\" (%s)\n", paths[i], strerror(errno));
+            printf("Error: Failed to stat \"%s\"", paths[i]);
+			utils_print_strerror();
             return ZPACK_FALSE;
         }
 
@@ -352,7 +362,7 @@ char* utils_get_full_path(char* full_path, const char* path)
 
 void utils_get_tmp_path(const char* path, char* tmp_path)
 {
-    srand(time(NULL));
+    srand((unsigned int)time(NULL));
 
     size_t path_len = strlen(path);
     memcpy(tmp_path, path, path_len);
@@ -491,4 +501,15 @@ int utils_get_heap_size(int n)
     while (b < n)
         b = b << 1;
     return b;
+}
+
+void utils_print_strerror()
+{
+#ifdef PLATFORM_WIN32
+	char buffer[255];
+	strerror_s(buffer, 255, errno);
+	printf("(%s)\n", buffer);
+#else
+	printf("(%s)\n", strerror(errno));
+#endif
 }

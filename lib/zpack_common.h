@@ -25,7 +25,7 @@ int zpack_seek_and_write(FILE* fp, size_t offset, const zpack_u8* buffer, size_t
 #define ZPACK_MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define ZPACK_MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-int zpack_get_heap_size(int n);
+zpack_u64 zpack_get_heap_size(zpack_u64 n);
 int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 needed);
 
 // Platform specific stuff
