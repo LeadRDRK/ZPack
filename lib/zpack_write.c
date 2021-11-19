@@ -42,6 +42,7 @@ int zpack_init_writer(zpack_writer* writer, const char* path)
 
 int zpack_init_writer_cfile(zpack_writer* writer, FILE* fp)
 {
+    if (!fp) return ZPACK_ERROR_OPEN_FAILED;
     writer->file = fp;
     return ZPACK_OK;
 }
