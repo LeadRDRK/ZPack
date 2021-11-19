@@ -591,6 +591,22 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
     return ZPACK_OK;
 }
 
+int zpack_init_reader(zpack_reader* reader, const char* path)
+{
+    FILE* fp = ZPACK_FOPEN(path, "rb");
+    if (!fp) return ZPACK_ERROR_OPEN_FAILED;
+    if (reader->file) ZPACK_FCLOSE(reader->file);
+    reader->file = fp;
+
+    return zpack_read_archive(reader);
+}
+
+int zpack_init_reader_cfile(zpack_reader* reader, FILE* fp)
+{
+    reader->file = fp;
+    return zpack_read_archive(reader);
+}
+
 int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size)
 {
     reader->buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * size);
@@ -610,16 +626,6 @@ int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size
     reader->buffer_shared = ZPACK_TRUE;
 
     return zpack_read_archive_memory(reader);
-}
-
-int zpack_init_reader(zpack_reader* reader, const char* path)
-{
-    FILE* fp = ZPACK_FOPEN(path, "rb");
-    if (!fp) return ZPACK_ERROR_OPEN_FAILED;
-    if (reader->file) ZPACK_FCLOSE(reader->file);
-    reader->file = fp;
-
-    return zpack_read_archive(reader);
 }
 
 void zpack_close_reader(zpack_reader* reader)
