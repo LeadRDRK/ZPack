@@ -170,43 +170,43 @@ zpack_bool utils_is_directory(stat_t* buf)
 }
 
 #ifdef PLATFORM_WIN32
-zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
+zpack_bool utils_get_directory_files_i(path_filename** files, int* file_count, int* list_size, wchar_t* dir_path, int depth)
 {
-    size_t dir_length = strlen(dir_path);
+    size_t dir_length = wcslen(dir_path);
     // construct find pattern (path\*)
-    char* find_path = (char*)malloc(sizeof(char) * (dir_length + 3));
-    memcpy(find_path, dir_path, dir_length);
-    find_path[dir_length] = '\\';
-    find_path[dir_length + 1] = '*';
-    find_path[dir_length + 2] = '\0';
+    wchar_t* find_path = (wchar_t*)malloc(sizeof(wchar_t) * (dir_length + 3));
+    memcpy(find_path, dir_path, sizeof(wchar_t) * dir_length);
+    find_path[dir_length] = L'\\';
+    find_path[dir_length + 1] = L'*';
+    find_path[dir_length + 2] = L'\0';
 
-    WIN32_FIND_DATAA entry;
+    WIN32_FIND_DATAW entry;
     HANDLE h_find;
 
-    h_find = FindFirstFileA(find_path, &entry);
+    h_find = FindFirstFileW(find_path, &entry);
     if (h_find == INVALID_HANDLE_VALUE)
     {
-        printf("Error: Failed to open directory \"%s\"\n", dir_path);
+        printf("Error: Failed to open directory \"%ls\"\n", dir_path);
 		free(find_path);
         return ZPACK_FALSE;
     }
 
     do
-    {   
-        if (strcmp(entry.cFileName, "..") == 0 || strcmp(entry.cFileName, ".") == 0)
+    {
+        if (wcscmp(entry.cFileName, L"..") == 0 || wcscmp(entry.cFileName, L".") == 0)
             continue;
 
-        size_t fn_length = strlen(entry.cFileName);
-        char* path = (char*)malloc(sizeof(char) * (dir_length + fn_length + 2));
+        size_t fn_length = wcslen(entry.cFileName);
+        wchar_t* path = (wchar_t*)malloc(sizeof(wchar_t) * (dir_length + fn_length + 2));
 
         // concatenate path + separator + filename
-        memcpy(path, dir_path, dir_length);
+        memcpy(path, dir_path, sizeof(wchar_t) * dir_length);
         path[dir_length] = PATH_SEPARATOR;
-        memcpy(path + dir_length + 1, entry.cFileName, fn_length + 1);
+        memcpy(path + dir_length + 1, entry.cFileName, sizeof(wchar_t) * (fn_length + 1));
 
         if (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
         {
-            utils_get_directory_files(files, file_count, list_size, path, depth + 1);
+            utils_get_directory_files_i(files, file_count, list_size, path, depth + 1);
             free(path);
         }
         else
@@ -216,20 +216,43 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
             {
                 FindClose(h_find);
 				free(find_path);
+                free(path);
                 return ZPACK_FALSE;
             }
             
-            entry->path = path;
-            entry->filename = utils_get_filename(path, depth + 1);
+            char* mb_path = (char*)malloc(sizeof(char) * (PATH_MAX+1));
+            if (zpack_convert_wchar_to_utf8(mb_path, PATH_MAX+1, path) == 0)
+            {
+                printf("Error: Failed to process paths\n");
+                FindClose(h_find);
+				free(find_path);
+                free(mb_path);
+                free(path);
+                return ZPACK_FALSE;
+            }
+
+            entry->path = mb_path;
+            entry->filename = utils_get_filename(mb_path, depth + 1);
             utils_convert_separators_archive(entry->filename);
             entry->path_alloc = ZPACK_TRUE;
         }
     }
-    while (FindNextFileA(h_find, &entry));
+    while (FindNextFileW(h_find, &entry));
 
     FindClose(h_find);
 	free(find_path);
     return ZPACK_TRUE;
+}
+
+zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
+{
+    wchar_t w_dir_path[PATH_MAX+1];
+    if (MultiByteToWideChar(65001 /* UTF8 */, 0, dir_path, -1, w_dir_path, PATH_MAX+1) == 0)
+    {
+        printf("Error: Failed to process path \"%s\"\n", dir_path);
+        return ZPACK_FALSE;
+    }
+    return utils_get_directory_files_i(files, file_count, list_size, w_dir_path, depth);
 }
 #elif defined(__linux__) || (PLATFORM_POSIX_VERSION >= 200112L)
 zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
