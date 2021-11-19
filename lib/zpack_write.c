@@ -40,6 +40,12 @@ int zpack_init_writer(zpack_writer* writer, const char* path)
     return ZPACK_OK;
 }
 
+int zpack_init_writer_cfile(zpack_writer* writer, FILE* fp)
+{
+    writer->file = fp;
+    return ZPACK_OK;
+}
+
 // header size + data signature size
 #define ZPACK_INITIAL_HEAP_SIZE ZPACK_HEADER_SIZE + ZPACK_SIGNATURE_SIZE
 int zpack_init_writer_heap(zpack_writer* writer, size_t initial_size)

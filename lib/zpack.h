@@ -200,13 +200,15 @@ ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, 
 ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t* in_size);
 ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, void* dctx);
 
+ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
+ZPACK_EXPORT int zpack_init_reader_cfile(zpack_reader* reader, FILE* fp);
 ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size);
 ZPACK_EXPORT int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size);
-ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
 ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
 
 // Writing
 ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
+ZPACK_EXPORT int zpack_init_writer_cfile(zpack_writer* writer, FILE* fp);
 ZPACK_EXPORT int zpack_init_writer_heap(zpack_writer* writer, size_t initial_size);
 
 ZPACK_EXPORT int zpack_write_header(zpack_writer* writer);
