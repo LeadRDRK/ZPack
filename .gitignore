@@ -1,5 +1,6 @@
 /build
 /win32-build
+/win64-build
 compile_commands.json
 /.clangd
 /.cache
