@@ -7,6 +7,12 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#ifdef PLATFORM_WIN32
+#define PRIu64 "llu"
+#else
+#include <inttypes.h>
+#endif
+
 #define WRITE_ERROR(writer, stream, in_buf, out_buf) \
     zpack_close_writer(writer); \
     zpack_close_stream(stream); \
@@ -181,7 +187,7 @@ int write_end(zpack_writer* writer, size_t orig_size)
     }
 
     printf("-- Done.\n"
-           "-- Archive size: %llu bytes\n"
+           "-- Archive size: %" PRIu64 " bytes\n"
            "-- Compression ratio: %f%%\n",
            writer->file_size, ((float)writer->file_size / orig_size) * 100);
     zpack_close_writer(writer);
@@ -415,7 +421,7 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
         return 1;
     }
-    printf("-- Found %llu files\n", reader.file_count);
+    printf("-- Found %" PRIu64 " files\n", reader.file_count);
 
     zpack_stream stream;
     memset(&stream, 0, sizeof(zpack_stream));
@@ -481,7 +487,7 @@ int command_extract_full(args_options* options)
     return extract_files_i(options, ZPACK_TRUE);
 }
 
-#define PRINT_LIST_ROW(s1, s2, method, name) printf("%12llu %12llu %8s  %s\n", s1, s2, method, name)
+#define PRINT_LIST_ROW(s1, s2, method, name) printf("%12" PRIu64 " %12" PRIu64 " %8s  %s\n", s1, s2, method, name)
 #define ROW_SEPARATOR "------------ ------------ --------  ------------------------\n"
 int command_list(args_options* options)
 {
@@ -516,7 +522,7 @@ int command_list(args_options* options)
         }
         PRINT_LIST_ROW(entry->uncomp_size, entry->comp_size, method, entry->filename);
     }
-    printf(ROW_SEPARATOR "%12llu %12llu %8s  %llu files\n",
+    printf(ROW_SEPARATOR "%12" PRIu64 " %12" PRIu64 " %8s  %" PRIu64 " files\n",
            reader.uncomp_size, reader.comp_size, "", reader.file_count);
 
     zpack_close_reader(&reader);
@@ -693,7 +699,7 @@ int command_test(args_options* options)
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
         return 1;
     }
-    printf("-- Found %llu files\n", reader.file_count);
+    printf("-- Found %" PRIu64 " files\n", reader.file_count);
 
     zpack_stream stream;
     memset(&stream, 0, sizeof(zpack_stream));
@@ -743,7 +749,7 @@ int command_test(args_options* options)
     }
 
     printf("-- Done.\n"
-           "-- Corrupted files: %llu/%llu\n", corrupt_count, reader.file_count);
+           "-- Corrupted files: %" PRIu64 "/%" PRIu64 "\n", corrupt_count, reader.file_count);
     zpack_close_reader(&reader);
     return 0;
 }

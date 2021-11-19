@@ -163,7 +163,7 @@ int utils_stat(const char* path, stat_t* buf)
 zpack_bool utils_is_directory(stat_t* buf)
 {
 #if defined(_MSC_VER)
-    return (buf->st_mode & _S_IFDIR);
+    return (buf->st_mode & _S_IFMT) == _S_IFDIR;
 #else
     return S_ISDIR(buf->st_mode);
 #endif
@@ -221,6 +221,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
             
             entry->path = path;
             entry->filename = utils_get_filename(path, depth + 1);
+            utils_convert_separators_archive(entry->filename);
             entry->path_alloc = ZPACK_TRUE;
         }
     }
@@ -282,7 +283,6 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
             
             entry->path = path;
             entry->filename = utils_get_filename(path, depth + 1);
-            utils_convert_separators_archive(entry->filename);
             entry->path_alloc = ZPACK_TRUE;
         }
     }
@@ -311,7 +311,6 @@ zpack_bool utils_prepare_file_list(char** paths, int path_count, path_filename**
     for (int i = 0; i < path_count; ++i)
     {
         utils_remove_trailing_separators(paths[i]);
-        utils_convert_separators(paths[i]);
         stat_t sb;
         if (utils_stat(paths[i], &sb))
         {
