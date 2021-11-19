@@ -30,8 +30,8 @@ int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 
 
 // Platform specific stuff
 
-// MSVC and Mingw
-#if defined(_MSC_VER) || defined(__MINGW32__)
+// Windows
+#ifdef _WIN32
 ZPACK_EXPORT FILE* zpack_fopen(const char* filename, const char* mode);
 #define ZPACK_FOPEN zpack_fopen
 #define ZPACK_FCLOSE fclose

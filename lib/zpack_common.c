@@ -3,13 +3,35 @@
 #include <xxhash.h>
 #include <stdlib.h>
 
-#if defined(_MSC_VER) || defined(__MINGW32__)
-
+// Windows specific
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+// Based on stbi__fopen
 FILE* zpack_fopen(const char* filename, const char* mode)
 {
-    FILE *fp = NULL;
-    fopen_s(&fp, filename, mode);
-    return fp;
+    FILE *f;
+    wchar_t w_mode[64];
+    wchar_t w_filename[1024];
+	if (0 == MultiByteToWideChar(65001 /* UTF8 */, 0, filename, -1, w_filename, sizeof(w_filename)/sizeof(*w_filename)))
+        return 0;
+
+	if (0 == MultiByteToWideChar(65001 /* UTF8 */, 0, mode, -1, w_mode, sizeof(w_mode)/sizeof(*w_mode)))
+        return 0;
+
+#if defined(_MSC_VER) && _MSC_VER >= 1400
+	if (0 != _wfopen_s(&f, w_filename, w_mode))
+		f = 0;
+#else
+    f = _wfopen(w_filename, w_mode);
+#endif
+
+    return f;
+}
+
+int zpack_convert_wchar_to_utf8(char *buffer, size_t len, const wchar_t* input)
+{
+    return WideCharToMultiByte(65001 /* UTF8 */, 0, input, -1, buffer, (int)len, NULL, NULL);
 }
 
 #endif
@@ -82,4 +104,5 @@ int zpack_init_stream(zpack_stream* stream)
 void zpack_close_stream(zpack_stream *stream)
 {
     XXH3_freeState(stream->xxh3_state);
+    stream->xxh3_state = NULL;
 }

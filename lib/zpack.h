@@ -237,6 +237,10 @@ ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
 ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
 ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
 
+#ifdef _WIN32
+ZPACK_EXPORT int zpack_convert_wchar_to_utf8(char *buffer, size_t len, const wchar_t* input);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
