@@ -365,8 +365,8 @@ int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buf
             return ZPACK_ERROR_MALLOC_FAILED;
         }
         
-        char* dst = buffer;
-        const char* src = comp_data;
+        zpack_u8* dst = buffer;
+        const zpack_u8* src = comp_data;
 
         size_t avail_out = max_size;
         size_t avail_in  = entry->comp_size;
