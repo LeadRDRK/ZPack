@@ -3,6 +3,10 @@
 
 #include <stdlib.h>
 
+#if (defined(__APPLE__) && defined(__MACH__))
+    #define PLATFORM_MACOS
+#endif
+
 #if (defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__)))
 #define PLATFORM_UNIX
 #include <limits.h>

@@ -346,7 +346,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
 }
 #endif
 
-#elif defined(__linux__) || (PLATFORM_POSIX_VERSION >= 200112L)
+#elif defined(__linux__) || defined(PLATFORM_MACOS) || (PLATFORM_POSIX_VERSION >= 200112L)
 zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int* list_size, char* dir_path, int depth)
 {
     size_t dir_length = strlen(dir_path);
