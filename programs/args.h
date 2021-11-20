@@ -19,6 +19,8 @@ typedef struct args_options_s
 
     zpack_bool unsafe;
 
+    char** argv; // Used on Windows only (to keep the pointer for the utf-8 args)
+
 } args_options;
 
 zpack_bool args_parse(int argc, char** argv, args_options* options);

@@ -46,6 +46,7 @@ int main(int argc, char** argv)
     if (!args_parse(argc, argv, &options))
     {
         print_help();
+        args_options_free(&options);
         return 1;
     }
 
@@ -55,6 +56,7 @@ int main(int argc, char** argv)
     {
         printf("Invalid command: %s\n", options.command);
         print_help();
+        args_options_free(&options);
         return 1;
     }
     else

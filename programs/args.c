@@ -1,8 +1,15 @@
 #include "args.h"
 #include "utils.h"
+#include "platform_defs.h"
 #include <zpack_common.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef PLATFORM_WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 static zpack_bool args_list_insert(char*** list, int* count, int* size, char* arg)
 {
@@ -26,6 +33,32 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
     if (argc < 2)
         return ZPACK_FALSE;
     
+#if defined(PLATFORM_WIN32) && !defined(ZPACK_DISABLE_UNICODE)
+    LPWSTR* w_argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (w_argv == NULL)
+    {
+        printf("Error: Failed to process command line arguments\n");
+        return ZPACK_FALSE;
+    }
+    // Convert wchar to multibyte UTF-8
+    argv = (char**)malloc(sizeof(char*) * argc);
+    for (int i = 0; i < argc; ++i)
+    {
+        // Get the size needed for the UTF-8 conversion
+        int needed = zpack_convert_wchar_to_utf8(NULL, 0, w_argv[i]);
+
+        // Alloc memory and convert
+        argv[i] = (char*)malloc(sizeof(char) * needed);
+        if (zpack_convert_wchar_to_utf8(argv[i], needed, w_argv[i]) == 0)
+        {
+            printf("Error: Failed to process command line arguments\n");
+            return ZPACK_FALSE;
+        }
+    }
+    LocalFree(w_argv);
+    options->argv = argv;
+#endif
+
     for (int i = 1; i < argc; ++i)
     {
         char* arg = argv[i];
@@ -120,4 +153,7 @@ void args_options_free(args_options* options)
 {
     free(options->path_list);
     free(options->exclude_list);
+#if defined(PLATFORM_WIN32) && !defined(ZPACK_DISABLE_UNICODE)
+    free(options->argv);
+#endif
 }

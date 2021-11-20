@@ -71,7 +71,16 @@ zpack_bool utils_mkdir(const char* path)
 #ifdef PLATFORM_UNIX
     ret = mkdir(path, 0755);
 #elif defined(PLATFORM_WIN32)
+
+#ifndef ZPACK_DISABLE_UNICODE
+    wchar_t w_path[PATH_MAX+1];
+    if (MultiByteToWideChar(65001 /* UTF8 */, 0, path, -1, w_path, PATH_MAX+1) == 0)
+        return ZPACK_FALSE;
+    ret = _wmkdir(w_path);
+#else
     ret = _mkdir(path);
+#endif
+
 #endif
 
     if (ret)
@@ -151,10 +160,28 @@ zpack_bool utils_move(const char* old, const char* new)
 
 int utils_stat(const char* path, stat_t* buf)
 {
+#if !defined(ZPACK_DISABLE_UNICODE) && (defined(_MSC_VER) || (defined(__MINGW32__) && defined (__MSVCRT__)))
+    wchar_t w_path[PATH_MAX+1];
+    if (MultiByteToWideChar(65001 /* UTF8 */, 0, path, -1, w_path, PATH_MAX+1) == 0)
+        return -1;
+#endif
+
 #if defined(_MSC_VER)
+
+#if !defined(ZPACK_DISABLE_UNICODE)
+    return _wstat64(w_path, buf);
+#else
     return _stat64(path, buf);
+#endif
+
 #elif defined(__MINGW32__) && defined (__MSVCRT__)
+
+#if !defined(ZPACK_DISABLE_UNICODE)
+    return _wstati64(w_path, buf);
+#else
     return _stati64(path, buf);
+#endif
+
 #else
     return stat(path, buf);
 #endif
@@ -171,7 +198,7 @@ zpack_bool utils_is_directory(stat_t* buf)
 
 #ifdef PLATFORM_WIN32
 #ifndef ZPACK_DISABLE_UNICODE
-zpack_bool utils_get_directory_files_i(path_filename** files, int* file_count, int* list_size, wchar_t* dir_path, int depth)
+static zpack_bool utils_get_directory_files_i(path_filename** files, int* file_count, int* list_size, wchar_t* dir_path, int depth)
 {
     size_t dir_length = wcslen(dir_path);
     // construct find pattern (path\*)
@@ -326,7 +353,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
     DIR* dir;
     if (!(dir = opendir(dir_path)))
     {
-        printf("Error: Failed to open directory \"%s\"", dir_path);
+        printf("Error: Failed to open directory \"%s\" ", dir_path);
 		utils_print_strerror();
         return ZPACK_FALSE;
     }
@@ -349,7 +376,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
         stat_t sb;
         if (utils_stat(path, &sb))
         {
-            printf("Error: Failed to stat \"%s\"", path);
+            printf("Error: Failed to stat \"%s\" ", path);
 			utils_print_strerror();
             closedir(dir);
             return ZPACK_FALSE;
@@ -378,7 +405,7 @@ zpack_bool utils_get_directory_files(path_filename** files, int* file_count, int
 
     if (errno)
     {
-        printf("Error: Failed to read directory \"%s\"", dir_path);
+        printf("Error: Failed to read directory \"%s\" ", dir_path);
 		utils_print_strerror();
         return ZPACK_FALSE;
     }
@@ -402,7 +429,7 @@ zpack_bool utils_prepare_file_list(char** paths, int path_count, path_filename**
         stat_t sb;
         if (utils_stat(paths[i], &sb))
         {
-            printf("Error: Failed to stat \"%s\"", paths[i]);
+            printf("Error: Failed to stat \"%s\" ", paths[i]);
 			utils_print_strerror();
             return ZPACK_FALSE;
         }
