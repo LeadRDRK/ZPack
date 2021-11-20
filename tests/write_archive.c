@@ -22,7 +22,7 @@ static const char* _out_names_s[2] = {
 };
 
 #define WRITE_ERROR(writer, ret, func_name) \
-    printf("-- Got error %d from " func_name ", last_return %" PRId64 "\n", ret, (writer)->last_return); \
+    printf("-- Got error %d from " func_name ", last_return %" PRId64 "\n", ret, (int64_t)(writer)->last_return); \
     zpack_close_writer(writer); \
     return ZPACK_FALSE;
 
@@ -59,7 +59,7 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
     {
         WRITE_ERROR(writer, ret, "zpack_init_stream");
     }
-    zpack_u32 stream_out_size = zpack_get_cstream_out_size(ZPACK_COMPRESSION_ZSTD);
+    size_t stream_out_size = zpack_get_cstream_out_size(ZPACK_COMPRESSION_ZSTD);
     zpack_u8* out_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * stream_out_size);
     stream.next_out = out_buf;
     stream.avail_out = stream_out_size;
@@ -110,7 +110,6 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
 
 zpack_bool write_archives(zpack_compression_method method)
 {
-    FILE* fp;
     zpack_compress_options options;
     options.method = method;
     switch (method)

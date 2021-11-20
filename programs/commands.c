@@ -189,7 +189,7 @@ static int write_end(zpack_writer* writer, size_t orig_size)
     printf("-- Done.\n"
            "-- Archive size: %" PRIu64 " bytes\n"
            "-- Compression ratio: %f%%\n",
-           writer->file_size, ((float)writer->file_size / orig_size) * 100);
+           (uint64_t)writer->file_size, ((float)writer->file_size / orig_size) * 100);
     zpack_close_writer(writer);
 
     return 0;
