@@ -20,7 +20,7 @@
     free(out_buf); \
     return 1
 
-int write_start(zpack_writer* writer, args_options* options, char* archive_path)
+static int write_start(zpack_writer* writer, args_options* options, char* archive_path)
 {
     if (options->path_count < 2)
     {
@@ -52,7 +52,7 @@ int write_start(zpack_writer* writer, args_options* options, char* archive_path)
     return 0;
 }
 
-int write_files(zpack_writer* writer, args_options* options, zpack_compress_options* comp_options, size_t* orig_size)
+static int write_files(zpack_writer* writer, args_options* options, zpack_compress_options* comp_options, size_t* orig_size)
 {
     char** paths = options->path_list + 1;
     int path_count = options->path_count - 1;
@@ -169,7 +169,7 @@ int write_files(zpack_writer* writer, args_options* options, zpack_compress_opti
     return 0;
 }
 
-int write_end(zpack_writer* writer, size_t orig_size)
+static int write_end(zpack_writer* writer, size_t orig_size)
 {
     int ret;
     if ((ret = zpack_write_cdr(writer)))
@@ -219,7 +219,7 @@ int command_create(args_options* options)
     return 0;
 }
 
-int open_archive_rw(args_options* options, zpack_reader* reader, zpack_writer* writer, char* tmp_path)
+static int open_archive_rw(args_options* options, zpack_reader* reader, zpack_writer* writer, char* tmp_path)
 {
     char* archive_path = options->path_list[0];
     int ret;
@@ -301,7 +301,7 @@ int command_add(args_options* options)
     return 0;
 }
 
-int init_decompress_stream(zpack_stream* stream)
+static int init_decompress_stream(zpack_stream* stream)
 {
     zpack_init_stream(stream);
 
@@ -323,7 +323,7 @@ int init_decompress_stream(zpack_stream* stream)
     return 0;
 }
 
-int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* entry, const char* filename, const char* output)
+static int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* entry, const char* filename, const char* output)
 {
     size_t output_length = output ? strlen(output) : 0;
     size_t fn_length = strlen(filename);
@@ -339,7 +339,7 @@ int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_entry* e
 
     if (!utils_mkdir_p(path, ZPACK_TRUE))
     {
-        printf("Error: Failed to create output directory for \"%s\"", path);
+        printf("Error: Failed to create output directory for \"%s\" ", path);
 		utils_print_strerror();
 		free(path);
         return 1;
