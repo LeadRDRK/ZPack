@@ -1,5 +1,6 @@
 #include <zpack.h>
 #include <string.h>
+#include <stdlib.h>
 #include "archive.h"
 
 #ifdef _WIN32
@@ -80,8 +81,7 @@ int open_archive(int num)
     // read from buffer (shared)
     printf("Buffer read test (shared)\n");
 
-    zpack_u8 tmp[size];
-    memcpy(tmp, _archive_buffers[num], size);
+    zpack_u8* tmp = (zpack_u8*)_archive_buffers[num];
     if ((ret = zpack_init_reader_memory_shared(&reader, tmp, size)))
     {
         printf("Error %d\n", ret);

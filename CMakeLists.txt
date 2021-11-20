@@ -32,6 +32,11 @@ if(ZPACK_DISABLE_UNICODE)
     set(ZPACK_DISABLE_DEFS ${ZPACK_DISABLE_DEFS} "ZPACK_DISABLE_UNICODE")
 endif()
 
+# warn if VLAs are used
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wvla)
+endif()
+
 add_subdirectory(externals)
 
 # detect and enable large file support
