@@ -60,7 +60,7 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
         WRITE_ERROR(writer, ret, "zpack_init_stream");
     }
     zpack_u32 stream_out_size = zpack_get_cstream_out_size(ZPACK_COMPRESSION_ZSTD);
-    zpack_u8 out_buf[stream_out_size];
+    zpack_u8* out_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * stream_out_size);
     stream.next_out = out_buf;
     stream.avail_out = stream_out_size;
 
@@ -78,6 +78,7 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
             if ((ret = zpack_write_file_stream(writer, files[i].options, &stream, NULL)))
             {
                 zpack_close_stream(&stream);
+                free(out_buf);
                 WRITE_ERROR(writer, ret, "zpack_write_file_stream");
             }
         }
@@ -85,10 +86,12 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
         if ((ret = zpack_write_file_stream_end(writer, files[i].filename, files[i].options, &stream, NULL)))
         {
             zpack_close_stream(&stream);
+            free(out_buf);
             WRITE_ERROR(writer, ret, "zpack_write_file_stream_end");
         }
     }
     zpack_close_stream(&stream);
+    free(out_buf);
 
     if ((ret = zpack_write_cdr(writer)))
     {
