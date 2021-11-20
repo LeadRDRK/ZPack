@@ -230,6 +230,7 @@ ZPACK_EXPORT void zpack_close_writer(zpack_writer* writer);
 
 // Stream management
 ZPACK_EXPORT int zpack_init_stream(zpack_stream* stream);
+ZPACK_EXPORT void zpack_reset_stream(zpack_stream *stream);
 ZPACK_EXPORT void zpack_close_stream(zpack_stream* stream);
 
 // Utils

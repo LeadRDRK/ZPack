@@ -67,9 +67,8 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
     for (int i = 0; i < FILE_COUNT; ++i)
     {
         // reset
+        zpack_reset_stream(&stream);
         stream.next_in = files[i].buffer;
-        stream.total_in = 0;
-        stream.total_out = 0;
 
         while (stream.total_in < files[i].size)
         {
