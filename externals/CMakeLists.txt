@@ -1,6 +1,14 @@
 # zstd
 if(NOT ZPACK_DISABLE_ZSTD AND NOT ZPACK_USE_SYSTEM_ZSTD)
     set(ZSTD_BUILD_PROGRAMS OFF)
+    # set build types explicitly
+    if(BUILD_SHARED_LIBS)
+        set(ZSTD_BUILD_SHARED ON)
+        set(ZSTD_BUILD_STATIC OFF)
+    else()
+        set(ZSTD_BUILD_SHARED OFF)
+        set(ZSTD_BUILD_STATIC ON)
+    endif()
     add_subdirectory(zstd/build/cmake)
 endif()
 
