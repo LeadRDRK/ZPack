@@ -16,7 +16,7 @@ if(NOT ZPACK_DISABLE_ZSTD)
             find_package(ZSTD REQUIRED)
         else()
             # prefer shared library
-            if(ZSTD_BUILD_SHARED)
+            if(TARGET libzstd_shared)
                 set(ZSTD_LIBRARIES libzstd_shared)
             else()
                 set(ZSTD_LIBRARIES libzstd_static)
