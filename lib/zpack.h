@@ -1,6 +1,8 @@
 #ifndef __ZPACK_H__
 #define __ZPACK_H__
 
+/** @file */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -135,48 +137,48 @@ typedef struct zpack_writer_s
 
 typedef struct zpack_stream_s
 {
-    zpack_u8* next_in;
-    size_t avail_in;
-    size_t total_in;
+    zpack_u8* next_in; //!< Input buffer
+    size_t avail_in; //!< Size of the input buffer
+    size_t total_in; //!< Total bytes read
 
-    zpack_u8* next_out;
-    size_t avail_out;
-    size_t total_out;
+    zpack_u8* next_out; //!< Input buffer
+    size_t avail_out; //!< Size of the input buffer
+    size_t total_out; //!< Total bytes written
 
-    size_t read_back;
+    size_t read_back; //!< Amount of bytes (starting from the end of the current input buffer) that needs to be present for the next operation. The data is expected to be at the beginning of the next input buffer
 
     // xxHash
-    void* xxh3_state;
+    void* xxh3_state; 
 
 } zpack_stream;
 
-enum zpack_result
+enum zpack_result //! Return codes
 {
-    ZPACK_OK,                         // No errors
+    ZPACK_OK,                         //!< No errors
 
-    ZPACK_ERROR_ARCHIVE_NOT_LOADED,   // Archive has not been loaded
-    ZPACK_ERROR_WRITER_NOT_OPENED,    // Writer has not been opened
-    ZPACK_ERROR_OPEN_FAILED,          // Failed to open file
-    ZPACK_ERROR_SEEK_FAILED,          // Failed to seek file
-    ZPACK_ERROR_SIGNATURE_INVALID,    // Invalid archive signature
-    ZPACK_ERROR_READ_FAILED,          // An archive section is invalid
-    ZPACK_ERROR_BLOCK_SIZE_INVALID,   // Invalid block size
-    ZPACK_ERROR_VERSION_INCOMPATIBLE, // Archive version is not supported
-    ZPACK_ERROR_MALLOC_FAILED,        // Failed to allocate memory
-    ZPACK_ERROR_FILE_NOT_FOUND,       // Could not find file in archive
-    ZPACK_ERROR_BUFFER_TOO_SMALL,     // Buffer size is too small
-    ZPACK_ERROR_DECOMPRESS_FAILED,    // Decompression error (check last_return for the compression library's error code)
-    ZPACK_ERROR_COMPRESS_FAILED,      // Compression error (check last_return for the compression library's error code)
-    ZPACK_ERROR_FILE_HASH_MISMATCH,   // The decompressed file's hash does not match the original file's hash
-    ZPACK_ERROR_FILE_OFFSET_INVALID,  // Invalid file offset
-    ZPACK_ERROR_FILE_INCOMPLETE,      // The file's data is incomplete
-    ZPACK_ERROR_FILE_SIZE_INVALID,    // Invalid file size
-    ZPACK_ERROR_COMP_METHOD_INVALID,  // Invalid compression method
-    ZPACK_ERROR_WRITE_FAILED,         // Failed to write data to file
-    ZPACK_ERROR_STREAM_INVALID,       // Invalid stream
-    ZPACK_ERROR_HASH_FAILED,          // Failed to generate hash for the data provided
-	ZPACK_ERROR_FILENAME_TOO_LONG,    // Filename length exceeds limit (65535 characters)
-    ZPACK_ERROR_NOT_AVAILABLE         // Feature not available in this build of ZPack (compression method disabled, etc.)
+    ZPACK_ERROR_ARCHIVE_NOT_LOADED,   //!< Archive has not been loaded
+    ZPACK_ERROR_WRITER_NOT_OPENED,    //!< Writer has not been opened
+    ZPACK_ERROR_OPEN_FAILED,          //!< Failed to open file
+    ZPACK_ERROR_SEEK_FAILED,          //!< Failed to seek file
+    ZPACK_ERROR_SIGNATURE_INVALID,    //!< Invalid archive signature
+    ZPACK_ERROR_READ_FAILED,          //!< An archive section is invalid
+    ZPACK_ERROR_BLOCK_SIZE_INVALID,   //!< Invalid block size
+    ZPACK_ERROR_VERSION_INCOMPATIBLE, //!< Archive version is not supported
+    ZPACK_ERROR_MALLOC_FAILED,        //!< Failed to allocate memory
+    ZPACK_ERROR_FILE_NOT_FOUND,       //!< Could not find file in archive
+    ZPACK_ERROR_BUFFER_TOO_SMALL,     //!< Buffer size is too small
+    ZPACK_ERROR_DECOMPRESS_FAILED,    //!< Decompression error (check last_return for the compression library's error code)
+    ZPACK_ERROR_COMPRESS_FAILED,      //!< Compression error (check last_return for the compression library's error code)
+    ZPACK_ERROR_FILE_HASH_MISMATCH,   //!< The decompressed file's hash does not match the original file's hash
+    ZPACK_ERROR_FILE_OFFSET_INVALID,  //!< Invalid file offset
+    ZPACK_ERROR_FILE_INCOMPLETE,      //!< The file's data is incomplete
+    ZPACK_ERROR_FILE_SIZE_INVALID,    //!< Invalid file size
+    ZPACK_ERROR_COMP_METHOD_INVALID,  //!< Invalid compression method
+    ZPACK_ERROR_WRITE_FAILED,         //!< Failed to write data to file
+    ZPACK_ERROR_STREAM_INVALID,       //!< Invalid stream
+    ZPACK_ERROR_HASH_FAILED,          //!< Failed to generate hash for the data provided
+	ZPACK_ERROR_FILENAME_TOO_LONG,    //!< Filename length exceeds limit (65535 characters)
+    ZPACK_ERROR_NOT_AVAILABLE         //!< Feature not available in this build of ZPack (compression method disabled, etc.)
 
 };
 
