@@ -2,6 +2,12 @@
 #include <string.h>
 #include "archive.h"
 
+#ifdef _WIN32
+#define PRId64 "lld"
+#else
+#include <inttypes.h>
+#endif
+
 #define BUFFER_SIZE 350
 #define STREAM_IN_SIZE 16
 #define STREAM_OUT_SIZE BUFFER_SIZE
@@ -16,7 +22,7 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
     {
         if ((ret = zpack_read_file(reader, reader->file_entries + i, buffer, BUFFER_SIZE, NULL)))
         {
-            printf("Failed to read %s (error %d, last return %ld)\n", reader->file_entries[i].filename, ret, reader->last_return);
+            printf("Failed to read %s (error %d, last return %" PRId64 ")\n", reader->file_entries[i].filename, ret, (int64_t)reader->last_return);
             passed = ZPACK_FALSE;
             continue;
         }
@@ -57,7 +63,7 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
 
             if ((ret = zpack_read_file_stream(reader, reader->file_entries + i, &stream, NULL)))
             {
-                printf("Failed to read %s (error %d, last return %ld)\n", reader->file_entries[i].filename, ret, reader->last_return);
+                printf("Failed to read %s (error %d, last return %" PRId64 ")\n", reader->file_entries[i].filename, ret, (int64_t)reader->last_return);
                 passed = ZPACK_FALSE;
                 break;
             }

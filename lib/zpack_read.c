@@ -531,7 +531,6 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
         break;
     }
     #else
-        if (reader->file) free(comp_data);
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
 
@@ -572,7 +571,6 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
         break;
     }
     #else
-        if (reader->file) free(comp_data);
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
     

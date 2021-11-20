@@ -11,6 +11,7 @@
 FILE* zpack_fopen(const char* filename, const char* mode)
 {
     FILE *f;
+#ifndef ZPACK_DISABLE_UNICODE
     wchar_t w_mode[64];
     wchar_t w_filename[1024];
 	if (0 == MultiByteToWideChar(65001 /* UTF8 */, 0, filename, -1, w_filename, sizeof(w_filename)/sizeof(*w_filename)))
@@ -26,13 +27,26 @@ FILE* zpack_fopen(const char* filename, const char* mode)
     f = _wfopen(w_filename, w_mode);
 #endif
 
+#else
+
+#if defined(_MSC_VER) && _MSC_VER >= 1400
+	if (0 != fopen_s(&f, filename, mode))
+		f = 0;
+#else
+    f = fopen(filename, mode);
+#endif 
+
+#endif
+
     return f;
 }
 
+#ifndef ZPACK_DISABLE_UNICODE
 int zpack_convert_wchar_to_utf8(char *buffer, size_t len, const wchar_t* input)
 {
     return WideCharToMultiByte(65001 /* UTF8 */, 0, input, -1, buffer, (int)len, NULL, NULL);
 }
+#endif
 
 #endif
 

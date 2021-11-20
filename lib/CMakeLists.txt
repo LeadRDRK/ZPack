@@ -24,8 +24,6 @@ if(NOT ZPACK_DISABLE_ZSTD)
             set(ZSTD_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/externals/zstd/lib)
         endif()
     endif()
-else()
-    set(ZPACK_DISABLE_DEFS ${ZPACK_DISABLE_DEFS} "ZPACK_DISABLE_ZSTD")
 endif()
 
 # lz4
@@ -34,8 +32,7 @@ if(NOT ZPACK_DISABLE_LZ4)
         if(ZPACK_USE_SYSTEM_LZ4)
             find_package(LZ4 REQUIRED)
         else()
-            # prefer shared library
-            if(TARGET lz4_shared)
+            if(BUILD_SHARED_LIBS)
                 set(LZ4_LIBRARIES lz4_shared)
             else()
                 set(LZ4_LIBRARIES lz4_static)
@@ -51,8 +48,6 @@ if(NOT ZPACK_DISABLE_LZ4)
             set(LZ4_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/lib)
         endif()
     endif()
-else()
-    set(ZPACK_DISABLE_DEFS ${ZPACK_DISABLE_DEFS} "ZPACK_DISABLE_LZ4")
 endif()
 
 # check library type
