@@ -157,8 +157,7 @@ static int write_files(zpack_writer* writer, args_options* options, zpack_compre
         ZPACK_FCLOSE(fp);
 
         // reset stream
-        stream.total_in = 0;
-        stream.total_out = 0;
+        zpack_reset_stream(&stream);
     }
 
     utils_free_file_list(files, file_count);
@@ -359,8 +358,7 @@ static int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_e
     size_t out_size = stream->avail_out;
 
     // Reset stream
-    stream->total_out = 0;
-    stream->total_in = 0;
+    zpack_reset_stream(stream);
 
     printf("  %s\n", entry->filename);
     int ret;

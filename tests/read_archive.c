@@ -46,10 +46,9 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
     }
     for (int i = 0; i < reader->file_count; ++i)
     {
+        zpack_reset_stream(&stream);
         stream.next_out = buffer;
         stream.avail_out = STREAM_OUT_SIZE;
-        stream.total_out = 0;
-        stream.total_in = 0;
 
         int passes = 0;
         for (;;)

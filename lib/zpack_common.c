@@ -115,6 +115,13 @@ int zpack_init_stream(zpack_stream* stream)
     return ZPACK_OK;
 }
 
+void zpack_reset_stream(zpack_stream *stream)
+{
+    stream->total_in  = 0;
+    stream->total_out = 0;
+    stream->read_back = 0;
+}
+
 void zpack_close_stream(zpack_stream *stream)
 {
     XXH3_freeState(stream->xxh3_state);
