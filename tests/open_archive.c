@@ -2,10 +2,17 @@
 #include <string.h>
 #include "archive.h"
 
+#ifdef _WIN32
+#define PRIu64 "llu"
+#define PRIx64 "llx"
+#else
+#include <inttypes.h>
+#endif
+
 zpack_bool print_and_verify_archive(zpack_reader* reader)
 {
     zpack_file_entry* entries = reader->file_entries;
-    printf("File count: %lu\n\n", reader->file_count);
+    printf("File count: %" PRIu64 "\n\n", reader->file_count);
 
     zpack_bool passed = ZPACK_TRUE;
     for (zpack_u64 i = 0; i < reader->file_count; ++i)
@@ -16,11 +23,11 @@ zpack_bool print_and_verify_archive(zpack_reader* reader)
             entries[i].hash == _hashes[i]
         );
 
-        printf("File #%lu\n"
+        printf("File #%" PRIu64 "\n"
                "Filename: %s\n"
-               "Compressed size: %lu\n"
-               "Uncompressed size: %lu\n"
-               "File hash: %lx\n"
+               "Compressed size: %" PRIu64 "\n"
+               "Uncompressed size: %" PRIu64 "\n"
+               "File hash: %" PRIx64 "\n"
                "Compression method: %u\n"
                "* This entry is %s\n"
                "\n",

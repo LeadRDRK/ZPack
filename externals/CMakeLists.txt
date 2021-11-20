@@ -7,6 +7,9 @@ endif()
 # lz4
 if(NOT ZPACK_DISABLE_LZ4 AND NOT ZPACK_USE_SYSTEM_LZ4)
     set(LZ4_BUILD_CLI OFF)
+    set(LZ4_BUNDLED_MODE OFF)
+    set(LZ4_BUILD_CLI OFF)
+    set(LZ4_BUILD_LEGACY_LZ4C OFF)
     add_subdirectory(lz4/build/cmake)
 endif()
 

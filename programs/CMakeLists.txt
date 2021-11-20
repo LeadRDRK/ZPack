@@ -11,5 +11,5 @@ add_executable(zpack_cli
 )
 target_include_directories(zpack_cli PRIVATE "../lib")
 target_link_libraries(zpack_cli PRIVATE zpack)
-target_compile_definitions(zpack_cli PRIVATE ${ZPACK_LFS_DEFS})
+target_compile_definitions(zpack_cli PRIVATE ${ZPACK_LFS_DEFS} ${ZPACK_DISABLE_DEFS})
 set_target_properties(zpack_cli PROPERTIES OUTPUT_NAME zpack)

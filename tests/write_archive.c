@@ -3,6 +3,12 @@
 #include <string.h>
 #include "archive.h"
 
+#ifdef _WIN32
+#define PRId64 "lld"
+#else
+#include <inttypes.h>
+#endif
+
 #define MIN(a, b) ((a < b) ? a : b)
 
 static const char* _out_names[2] = {
@@ -16,7 +22,7 @@ static const char* _out_names_s[2] = {
 };
 
 #define WRITE_ERROR(writer, ret, func_name) \
-    printf("-- Got error %d from " func_name ", last_return %ld\n", ret, (writer)->last_return); \
+    printf("-- Got error %d from " func_name ", last_return %" PRId64 "\n", ret, (writer)->last_return); \
     zpack_close_writer(writer); \
     return ZPACK_FALSE;
 
