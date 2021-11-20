@@ -15,5 +15,6 @@ endif()
 
 # xxHash
 if(NOT ZPACK_USE_SYSTEM_XXHASH)
+    set(XXHASH_BUILD_XXHSUM OFF)
     add_subdirectory(xxHash/cmake_unofficial)
 endif()
