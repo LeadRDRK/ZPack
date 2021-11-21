@@ -442,7 +442,7 @@ static int zpack_check_cctx_stream(void** cctx, zpack_compression_method method,
 
 int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* options, zpack_stream* stream, void* cctx)
 {
-    if (!stream->next_in || !stream->avail_in || !stream->next_out || !stream->avail_out)
+    if (!stream->next_in || !stream->next_out || !stream->avail_out)
         return ZPACK_ERROR_STREAM_INVALID;
 
     int ret;
