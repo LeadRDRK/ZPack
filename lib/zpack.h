@@ -63,6 +63,9 @@ typedef struct zpack_file_entry_s
     
 } zpack_file_entry;
 
+/**
+ * @ingroup reader
+ */
 typedef struct zpack_reader_s
 {
     zpack_u16 version;
@@ -182,31 +185,233 @@ enum zpack_result //! Return codes
 
 };
 
-// Reading
+// Reading //
+
+/** @defgroup lowlevel_read Low-level Reading Functions
+ *  These are advanced reading functions that requires you to manage data manually.
+ *  For a more conventional way to read archives, see @ref reader
+ *  @{
+ */
+
+/**
+ * Read the header from memory.
+ * @param buffer The buffer to read from.
+ * @param version Version of the archive.
+ */
 ZPACK_EXPORT int zpack_read_header_memory(const zpack_u8* buffer, zpack_u16* version);
+
+/**
+ * Read the header from a file stream.
+ * @param fp The file to read from.
+ * @param version Version of the archive.
+ */
 ZPACK_EXPORT int zpack_read_header(FILE* fp, zpack_u16* version);
+
+/**
+ * Read and verify the data header from memory.
+ * @param buffer The buffer to read from.
+ */
 ZPACK_EXPORT int zpack_read_data_header_memory(const zpack_u8* buffer);
+
+/**
+ * Read and verify the data header from a file stream.
+ * @param fp The file to read from.
+ */
 ZPACK_EXPORT int zpack_read_data_header(FILE* fp);
+
+/**
+ * Read the end of central directory record from memory.
+ * @param buffer The buffer to read from.
+ * @param cdr_offset Offset of the central directory record from the start of the archive.
+ */
 ZPACK_EXPORT int zpack_read_eocdr_memory(const zpack_u8* buffer, zpack_u64* cdr_offset);
+
+/**
+ * Read the end of central directory record from a file stream.
+ * @param fp The file to read from.
+ * @param eocdr_offset Offset of the end of central directory record from the start of the archive.
+ * @param cdr_offset Offset of the central directory record from the start of the archive.
+ */
 ZPACK_EXPORT int zpack_read_eocdr(FILE* fp, zpack_u64 eocdr_offset, zpack_u64* cdr_offset);
+
+/**
+ * Read the central directory record's header from memory. Note that this function is used
+ * automatically by both zpack_read_cdr_memory and zpack_read_cdr.
+ * @param buffer The buffer to read from.
+ * @param count The number of file entries.
+ * @param block_size Size of the entire block (excluding the header)
+ * @see zpack_read_cdr_memory, zpack_read_cdr
+ */
 ZPACK_EXPORT int zpack_read_cdr_header_memory(const zpack_u8* buffer, zpack_u64* count, zpack_u64* block_size);
+
+/**
+ * Read a single file entry from memory. Note that this function is used automatically by both
+ * zpack_read_cdr_memory and zpack_read_cdr.
+ * @param buffer The buffer to read from.
+ * @param entry The file entry.
+ * @param entry_size Size of the entry in bytes.
+ * @see zpack_read_cdr_memory, zpack_read_cdr
+ */
 ZPACK_EXPORT int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_file_entry* entry, size_t* entry_size);
+
+/**
+ * Read all file entries from memory. Note that this function is used automatically by both
+ * zpack_read_cdr_memory and zpack_read_cdr.
+ * @param buffer The buffer to read from.
+ * @param entries The file entries.
+ * @param count Number of file entries.
+ * @param block_size Size of the entire block.
+ * @param total_cs The total compressed size of all files in the archive.
+ * @param total_us The total uncompressed size of all files in the archive.
+ * @see zpack_read_cdr_memory, zpack_read_cdr
+ */
 ZPACK_EXPORT int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 count, zpack_u64 block_size, zpack_u64* total_cs, zpack_u64* total_us);
+
+/**
+ * Read the central directory record from memory.
+ * @param buffer The buffer to read from.
+ * @param size_left Number of bytes left from the current buffer position. Used for bounds checking.
+                    Note: This function does bounds checking by the fact that CDRs have an
+                    undetermined size. Other functions requires that you do bounds checking manually.
+ * @param entries The file entries.
+ * @param count Number of file entries.
+ * @param total_cs The total compressed size of all files in the archive.
+ * @param total_us The total uncompressed size of all files in the archive.
+ */
 ZPACK_EXPORT int zpack_read_cdr_memory(const zpack_u8* buffer, size_t size_left, zpack_file_entry** entries, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
+
+/**
+ * Read the central directory record from a file stream.
+ * @param fp The file to read from.
+ * @param cdr_offset Offset of the central directory record from the start of the archive.
+ * @param entries The file entries.
+ * @param count Number of file entries.
+ * @param total_cs The total compressed size of all files in the archive.
+ * @param total_us The total uncompressed size of all files in the archive.
+ */
 ZPACK_EXPORT int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
+
+/** @} */ // lowlevel_read
+
+/** @defgroup reader Reader
+ *  The archive reader.\n
+ *  Thread safety: <b>Not guaranteed.</b>\n
+ *  When reading from a buffer, all file reading functions are guaranteed to be thread safe,
+ *  provided that you use a different decompression context for each thread.\n
+ *  When reading from a file, thread safety is not guaranteed due to separate fseek/fread operations.
+ *  @{
+ */
+
+/**
+ * Read the entire archive from the buffer assigned in the reader.
+ * @see zpack_init_reader_memory, zpack_init_reader_memory_shared
+ * @param reader The reader to read from.
+ */
 ZPACK_EXPORT int zpack_read_archive_memory(zpack_reader* reader);
+
+/**
+ * Read the entire archive from the file stream assigned in the reader.
+ * @param reader The reader to read from.
+ * @see zpack_init_reader, zpack_init_reader_cfile
+ */
 ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
 
+
+/**
+ * Read the raw compressed data of a file.
+ * @param reader The reader to read from.
+ * @param entry The file entry.
+ * @param buffer The output buffer.
+ * @param max_size Maximum number of bytes to read from.
+ * @see zpack_read_file
+ */
 ZPACK_EXPORT int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
+
+/**
+ * Read and decompress the data of a file.
+ * @param reader The reader to read from.
+ * @param entry The file entry.
+ * @param buffer The output buffer.
+ * @param max_size Maximum number of bytes to read from.
+ * @param dctx The decompression context to be used. The context's compression library must
+               match the file's compression method. You can pass NULL to use the reader's
+               built-in decompression contexts.
+ */
 ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size, void* dctx);
+
+/**
+ * (Streaming) Read the raw compressed data of a file. The data will be read to the input buffer
+ * (next_in) as it's intended to be decompressed to an output buffer. Reading will start from
+ * entry.offset + stream.total_in (or continue from the previous operation)\n
+ * next_in, avail_in and total_in will be updated to reflect the number of bytes read.
+ * @param reader The reader to read from.
+ * @param entry The file entry.
+ * @param stream The stream.
+ * @param in_size Number of bytes read to the input buffer (0 <= in_size <= stream.avail_in)
+ * @see zpack_read_file_stream
+ */
 ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t* in_size);
+
+/**
+ * (Streaming) Read and decompress the data of a file. The compressed data will be read to
+ * next_in, and decompressed to next_out. Reading will start from entry.offset + stream.total_in
+ * (or continue from the previous operation). Call this function repeatedly until stream.total_in
+ * == entry.comp_size && stream.read_back == 0, in which case the entire file has been decompressed.\n
+ * The stream will be updated to reflect the number of bytes read/written.\n
+ * The compressed data might not be decompressed entirely in one go, in which case stream.read_back
+ * will be set. It specifies the amount of bytes needed from the current input buffer, starting
+ * from the end of the buffer. This data must be present at the start of the next input buffer.
+ * @param reader The reader to read from.
+ * @param entry The file entry.
+ * @param stream The stream.
+ * @param dctx The decompression context to be used. The context's compression library must
+               match the file's compression method. You can pass NULL to use the reader's
+               built-in decompression contexts.
+ */
 ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, void* dctx);
 
+/**
+ * Initializes the reader using a file.
+ * @param reader The reader.
+ * @param path Path to the archive.
+ */
 ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
+
+/**
+ * Initializes the reader using an already opened file stream. Note that this file stream will
+ * be closed by zpack_close_reader; you may set reader->file to NULL before calling it to prevent
+ * the file from being closed.
+ * @param reader The reader.
+ * @param fp The file stream.
+ */
 ZPACK_EXPORT int zpack_init_reader_cfile(zpack_reader* reader, FILE* fp);
+
+/**
+ * Initializes the reader using a buffer containing the archive.
+ * @param reader The reader.
+ * @param buffer The archive buffer.
+ * @param size The size of the buffer.
+ */
 ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size);
+
+/**
+ * Same as zpack_init_reader_memory, without copying the archive buffer to another one. The data
+ * will be read directly from the buffer provided and is expected to be present throughout the
+ * entire reading session. Note that the buffer will not be freed by zpack_close_reader.
+ * @param reader The reader.
+ * @param buffer The archive buffer.
+ * @param size The size of the buffer.
+ */
 ZPACK_EXPORT int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size);
+
+/**
+ * Closes the reader, releasing all resources previously occupied by it. This will make the reader
+ * ready to be reused for another session.
+ * @param reader The reader.
+ */
 ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
+
+/** @} */ // reader
 
 // Writing
 ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
