@@ -45,6 +45,12 @@ typedef zpack_u8 zpack_bool;
 #define ZPACK_ARCHIVE_VERSION_MIN 1
 #define ZPACK_ARCHIVE_VERSION_MAX 1
 
+/** @defgroup common Common
+ */
+
+/**
+ * @ingroup common
+ */
 typedef enum zpack_compression_method_e
 {
     ZPACK_COMPRESSION_ZSTD = 0,
@@ -52,6 +58,9 @@ typedef enum zpack_compression_method_e
 
 } zpack_compression_method;
 
+/**
+ * @ingroup common
+ */
 typedef struct zpack_file_entry_s
 {
     char*     filename;
@@ -93,6 +102,9 @@ typedef struct zpack_reader_s
 
 } zpack_reader;
 
+/**
+ * @ingroup writer
+ */
 typedef struct zpack_compress_options_s
 {
     zpack_compression_method method;
@@ -100,6 +112,9 @@ typedef struct zpack_compress_options_s
 
 } zpack_compress_options;
 
+/**
+ * @ingroup writer
+ */
 typedef struct zpack_file_s
 {
     char*     filename;
@@ -111,10 +126,13 @@ typedef struct zpack_file_s
 
 } zpack_file;
 
+/**
+ * @ingroup writer
+ */
 typedef struct zpack_writer_s
 {
     zpack_u8* buffer;
-    zpack_u64 buffer_capacity;
+    size_t buffer_capacity;
     FILE* file;
     size_t file_size;
 
@@ -138,6 +156,9 @@ typedef struct zpack_writer_s
 
 } zpack_writer;
 
+/**
+ * @ingroup stream
+ */
 typedef struct zpack_stream_s
 {
     zpack_u8* next_in; //!< Input buffer
@@ -155,6 +176,9 @@ typedef struct zpack_stream_s
 
 } zpack_stream;
 
+/**
+ * @ingroup common
+ */
 enum zpack_result //! Return codes
 {
     ZPACK_OK,                         //!< No errors
@@ -305,13 +329,13 @@ ZPACK_EXPORT int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry
 /**
  * Read the entire archive from the buffer assigned in the reader.
  * @see zpack_init_reader_memory, zpack_init_reader_memory_shared
- * @param reader The reader to read from.
+ * @param reader The reader.
  */
 ZPACK_EXPORT int zpack_read_archive_memory(zpack_reader* reader);
 
 /**
  * Read the entire archive from the file stream assigned in the reader.
- * @param reader The reader to read from.
+ * @param reader The reader.
  * @see zpack_init_reader, zpack_init_reader_cfile
  */
 ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
@@ -319,7 +343,7 @@ ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
 
 /**
  * Read the raw compressed data of a file.
- * @param reader The reader to read from.
+ * @param reader The reader.
  * @param entry The file entry.
  * @param buffer The output buffer.
  * @param max_size Maximum number of bytes to read from.
@@ -329,7 +353,7 @@ ZPACK_EXPORT int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* ent
 
 /**
  * Read and decompress the data of a file.
- * @param reader The reader to read from.
+ * @param reader The reader.
  * @param entry The file entry.
  * @param buffer The output buffer.
  * @param max_size Maximum number of bytes to read from.
@@ -344,7 +368,7 @@ ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, 
  * (next_in) as it's intended to be decompressed to an output buffer. Reading will start from
  * entry.offset + stream.total_in (or continue from the previous operation)\n
  * next_in, avail_in and total_in will be updated to reflect the number of bytes read.
- * @param reader The reader to read from.
+ * @param reader The reader.
  * @param entry The file entry.
  * @param stream The stream.
  * @param in_size Number of bytes read to the input buffer (0 <= in_size <= stream.avail_in)
@@ -361,7 +385,7 @@ ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_ent
  * The compressed data might not be decompressed entirely in one go, in which case stream.read_back
  * will be set. It specifies the amount of bytes needed from the current input buffer, starting
  * from the end of the buffer. This data must be present at the start of the next input buffer.
- * @param reader The reader to read from.
+ * @param reader The reader.
  * @param entry The file entry.
  * @param stream The stream.
  * @param dctx The decompression context to be used. The context's compression library must
@@ -421,45 +445,246 @@ ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
 
 /** @} */ // reader
 
-// Writing
+// Writing //
+
+/** @defgroup writer Writer
+ *  The archive writer.\n
+ *  Thread safety: <b>Not thread safe.</b>\n
+ *  zpack_writer depends on a write_offset variable to know where to write next. Running multiple
+ *  write operations at the same time will result in undefined behavior.\n
+ *  Note that there are no restrictions on the ordering of each block while writing the archive,
+ *  so make sure to follow the correct order.\n
+ *  (header -> data header -> files -> cdr -> eocdr)
+ *  @{
+ */
+
+/**
+ * Initializes the writer and opens a file for writing.
+ * @param writer The writer.
+ * @param path Path to the file.
+ */
 ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
+
+/**
+ * Initializes the writer and sets the output file stream to fp.
+ * @param writer The writer.
+ * @param fp The file stream.
+ */
 ZPACK_EXPORT int zpack_init_writer_cfile(zpack_writer* writer, FILE* fp);
+
+/**
+ * Initializes the writer and allocates a memory heap for writing, using the initial size provided.
+ * If the initial size is 0 or too small, it'll be set to the minimum archive size. The buffer will be
+ * resized automatically to fit the data during write operations.
+ * @param writer The writer.
+ * @param initial_size The initial heap size.
+ */
 ZPACK_EXPORT int zpack_init_writer_heap(zpack_writer* writer, size_t initial_size);
 
+
+/**
+ * Write the header.
+ * @param writer The writer.
+ */
 ZPACK_EXPORT int zpack_write_header(zpack_writer* writer);
+
+/**
+ * (Ex) Write the header.\n
+ * Note: If unsure, use @ref zpack_write_header instead.
+ * @param writer The writer.
+ * @param version The archive's version.
+ * @see zpack_write_header
+ */
 ZPACK_EXPORT int zpack_write_header_ex(zpack_writer* writer, zpack_u16 version);
+
+/**
+ * Write the data header.
+ * @param writer The writer.
+ */
 ZPACK_EXPORT int zpack_write_data_header(zpack_writer* writer);
+
+/**
+ * Compress and write files to archive.
+ * @param writer The writer.
+ * @param files Files to be written.
+ * @param file_count Number of files to be written.
+ */
 ZPACK_EXPORT int zpack_write_files(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
+
+/**
+ * Copy files from another archive.
+ * @param writer The writer.
+ * @param reader The reader (for the other archive).
+ * @param entries Files to be written.
+ * @param file_count Number of files to be written.
+ */
 ZPACK_EXPORT int zpack_write_files_from_archive(zpack_writer* writer, zpack_reader* reader, zpack_file_entry* entries, zpack_u64 file_count);
+
+/**
+ * (Streaming) Compress and write (part of) file to archive.
+ * Call this function repeatedly with new data, then call @ref zpack_write_file_stream_end
+ * when all data has been consumed to write a file.
+ * Only stream.next_in and stream.avail_in are updated after each call.
+ * The output buffer only serves as a temporary buffer before the data is written to the writer's
+ * output.
+ * @param writer The writer.
+ * @param options Compression options.
+ * @param stream The stream.
+ * @param cctx The compression context to be used. The context's compression library must match
+               the compression method specified in options. You can pass NULL to use the writer's
+               built-in compression contexts.
+ */
 ZPACK_EXPORT int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* options, zpack_stream* stream, void* cctx);
+
+/**
+ * (Streaming) Ends a file writing session. Flushes all data to the output and adds the file
+ * into the file entry list. stream.next_in and stream.avail_in is allowed to be empty.
+ * @param writer The writer.
+ * @param filename Filename.
+ * @param options Compression options.
+ * @param stream The stream.
+ * @param cctx The compression context to be used. This context must be the one used for
+               @ref zpack_write_file_stream to compress the file's data.
+ */
 ZPACK_EXPORT int zpack_write_file_stream_end(zpack_writer* writer, char* filename, zpack_compress_options* options, zpack_stream* stream, void* cctx);
+
+/**
+ * Write the central directory record.
+ * @param writer The writer.
+ */
 ZPACK_EXPORT int zpack_write_cdr(zpack_writer* writer);
+
+/**
+ * (Ex) Write the central directory record.\n
+ * Note: If unsure, use @ref zpack_write_cdr instead.
+ * @param writer The writer.
+ * @param entries File entries.
+ * @param file_count File count.
+ * @see zpack_write_cdr
+ */
 ZPACK_EXPORT int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u64 file_count);
+
+/**
+ * Write the end of central directory record.
+ * @param writer The writer.
+ */
 ZPACK_EXPORT int zpack_write_eocdr(zpack_writer* writer);
+
+/**
+ * (Ex) Write the end of central directory record.\n
+ * Note: If unsure, use @ref zpack_write_eocdr instead.
+ * @param writer The writer.
+ * @param cdr_offset Offset of the central directory record from the start of the archive.
+ * @see zpack_write_eocdr
+ */
 ZPACK_EXPORT int zpack_write_eocdr_ex(zpack_writer* writer, zpack_u64 cdr_offset);
 
+
+/**
+ * Writes the entire archive.
+ * @param writer The writer.
+ * @param files Files to be written to the archive.
+ * @param file_count File count.
+ */
 ZPACK_EXPORT int zpack_write_archive(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
+
+/**
+ * Closes the writer, releasing all resources previously occupied by it. This will make the writer
+ * ready to be reused for another session.
+ * @param writer The writer.
+ */
 ZPACK_EXPORT void zpack_close_writer(zpack_writer* writer);
 
-// Stream management
+/** @} */ // writer
+
+/** @defgroup stream Stream
+ *  zpack_stream and stream management functions.
+ *  @{
+ */
+
+/**
+ * Initializes the stream.
+ * @param stream The stream.
+ */
 ZPACK_EXPORT int zpack_init_stream(zpack_stream* stream);
+
+/**
+ * Resets the stream. Must be called after (de)compressing a file to be usable again.
+ * @param stream The stream.
+ */
 ZPACK_EXPORT void zpack_reset_stream(zpack_stream *stream);
+
+/**
+ * Closes the stream. This does not free the buffers in next_in and next_out.
+ * @param stream The stream.
+ */
 ZPACK_EXPORT void zpack_close_stream(zpack_stream* stream);
 
-// Utils
+/** @} */ // stream
+
+// Utils //
+
+/** @defgroup utils Utils
+ *  @{
+ */
+
+/**
+ * Gets the recommended input size for decompression.
+ * @param method The compression method to get the size for.
+ */
 ZPACK_EXPORT size_t zpack_get_dstream_in_size(zpack_compression_method method);
+
+/**
+ * Gets the recommended output size for decompression.
+ * @param method The compression method to get the size for.
+ */
 ZPACK_EXPORT size_t zpack_get_dstream_out_size(zpack_compression_method method);
+
+/**
+ * Gets the recommended input size for compression.
+ * @param method The compression method to get the size for.
+ */
 ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
+
+/**
+ * Gets the recommended output size for compression.
+ * @param method The compression method to get the size for.
+ */
 ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
+
+/**
+ * Gets the first file entry with the specified filename. This uses a simple linear lookup.
+ * @param filename The filename to look for.
+ * @param file_entries List of file entries.
+ */
 ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
+
+/**
+ * Checks if a read stream is done. A macro is also available: see @ref ZPACK_READ_STREAM_DONE
+ * @param stream The stream.
+ * @param entry Entry of the file being read.
+ */
 ZPACK_EXPORT zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_entry* entry);
 
+/**
+ * Checks if a read stream is done. A function is also available: see @ref zpack_read_stream_done
+ */
 #define ZPACK_READ_STREAM_DONE(stream, entry) \
     ((stream)->total_in == (entry)->comp_size && (stream)->read_back == 0)
 
 #if defined(_WIN32) && !defined(ZPACK_DISABLE_UNICODE)
+/**
+ * Converts a Windows wide char path to a UTF-8 formatted multibyte path. Needed for opening files
+ * with Unicode characters in their name.\n
+ * <b>Note:</b> This function is only available on Windows, with Unicode support enabled.
+ * @param buffer Output for the UTF-8 path.
+ * @param len Length of the output buffer.
+ * @param input The original wide char path.
+ */
 ZPACK_EXPORT int zpack_convert_wchar_to_utf8(char *buffer, size_t len, const wchar_t* input);
 #endif
+
+/** @} */ // utils
 
 #ifdef __cplusplus
 }
