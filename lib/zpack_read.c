@@ -476,9 +476,9 @@ int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zp
 
 int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, void* dctx)
 {
-    if (entry->comp_size == 0 || stream->total_out >= entry->uncomp_size)
+    if (entry->comp_size == 0 || ZPACK_READ_STREAM_DONE(stream, entry))
         return ZPACK_OK;
-    
+
     if (!stream->next_out || !stream->avail_out)
         return ZPACK_ERROR_STREAM_INVALID;
     
@@ -543,8 +543,6 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
         if (!dctx) return ZPACK_ERROR_MALLOC_FAILED;
 
         size_t dst_size, src_size;
-        zpack_u8* tmp_buffer = NULL;
-
         dst_size = stream->avail_out;
         src_size = in_size;
 
@@ -580,7 +578,8 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
         return ZPACK_ERROR_COMP_METHOD_INVALID;
     }
 
-    if (stream->total_out == entry->uncomp_size)
+    // check if the entire file has been read and decompressed
+    if (ZPACK_READ_STREAM_DONE(stream, entry))
     {
         // verify hash
         zpack_u64 hash = XXH3_64bits_digest(stream->xxh3_state);
@@ -626,6 +625,19 @@ int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size
     reader->buffer_shared = ZPACK_TRUE;
 
     return zpack_read_archive_memory(reader);
+}
+
+void zpack_reset_reader_dctx(zpack_reader* reader)
+{
+#ifndef ZPACK_DISABLE_ZSTD
+    if (reader->zstd_dctx)
+        ZSTD_DCtx_reset(reader->zstd_dctx, ZSTD_reset_session_only);
+#endif
+
+#ifndef ZPACK_DISABLE_LZ4
+    if (reader->lz4f_dctx)
+        LZ4F_resetDecompressionContext(reader->lz4f_dctx);
+#endif
 }
 
 void zpack_close_reader(zpack_reader* reader)

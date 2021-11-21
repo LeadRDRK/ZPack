@@ -405,6 +405,14 @@ ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* 
 ZPACK_EXPORT int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size);
 
 /**
+ * Resets the reader's built-in decompression contexts. This is usually done automatically, but if
+ * a reading operation was stopped prematurely, this MUST be called before starting another reading
+ * operation.
+ * @param reader The reader.
+ */
+ZPACK_EXPORT void zpack_reset_reader_dctx(zpack_reader* reader);
+
+/**
  * Closes the reader, releasing all resources previously occupied by it. This will make the reader
  * ready to be reused for another session.
  * @param reader The reader.
@@ -444,6 +452,10 @@ ZPACK_EXPORT size_t zpack_get_dstream_out_size(zpack_compression_method method);
 ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
 ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
 ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
+ZPACK_EXPORT zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_entry* entry);
+
+#define ZPACK_READ_STREAM_DONE(stream, entry) \
+    ((stream)->total_in == (entry)->comp_size && (stream)->read_back == 0)
 
 #if defined(_WIN32) && !defined(ZPACK_DISABLE_UNICODE)
 ZPACK_EXPORT int zpack_convert_wchar_to_utf8(char *buffer, size_t len, const wchar_t* input);

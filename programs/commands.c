@@ -142,15 +142,12 @@ static int write_files(zpack_writer* writer, args_options* options, zpack_compre
             }
 
             // compress the data
-            if (stream.avail_in > 0)
+            if (orig_size) *orig_size += stream.avail_in;
+            if ((ret = zpack_write_file_stream(writer, comp_options, &stream, NULL)))
             {
-                if (orig_size) *orig_size += stream.avail_in;
-                if ((ret = zpack_write_file_stream(writer, comp_options, &stream, NULL)))
-                {
-                    printf("Error: Failed to compress \"%s\" (error %d)\n", files[i].filename, ret);
-                    ZPACK_FCLOSE(fp);
-                    WRITE_ERROR(writer, &stream, in_buf, out_buf);
-                }
+                printf("Error: Failed to compress \"%s\" (error %d)\n", files[i].filename, ret);
+                ZPACK_FCLOSE(fp);
+                WRITE_ERROR(writer, &stream, in_buf, out_buf);
             }
         }
         zpack_write_file_stream_end(writer, files[i].filename, comp_options, &stream, NULL);
@@ -184,6 +181,8 @@ static int write_end(zpack_writer* writer, size_t orig_size)
         zpack_close_writer(writer);
         return 1;
     }
+
+    if (orig_size == 0) orig_size = 1;
 
     printf("-- Done.\n"
            "-- Archive size: %" PRIu64 " bytes\n"
@@ -397,7 +396,7 @@ static int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_e
         stream->next_out = out_buf;
         stream->avail_out = out_size;
 
-        if (stream->total_out == entry->uncomp_size) break;
+        if (ZPACK_READ_STREAM_DONE(stream, entry)) break;
     }
 	
 	free(path);
@@ -742,7 +741,7 @@ int command_test(args_options* options)
             stream.next_out = out_buf;
             stream.avail_out = out_size;
 
-            if (stream.total_out == entry->uncomp_size) break;
+            if (ZPACK_READ_STREAM_DONE(&stream, entry)) break;
         }
     }
 

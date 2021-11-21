@@ -127,3 +127,8 @@ void zpack_close_stream(zpack_stream *stream)
     XXH3_freeState(stream->xxh3_state);
     stream->xxh3_state = NULL;
 }
+
+zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_entry* entry)
+{
+    return ZPACK_READ_STREAM_DONE(stream, entry);
+}

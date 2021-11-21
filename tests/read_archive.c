@@ -70,7 +70,7 @@ zpack_bool read_and_verify_files(zpack_reader* reader, zpack_u8* buffer)
             ++passes;
             //printf("pass %d, total_in %lu, total_out %lu\n", passes, stream.total_in, stream.total_out);
 
-            if (stream.total_out == reader->file_entries[i].uncomp_size) break;
+            if (ZPACK_READ_STREAM_DONE(&stream, reader->file_entries + i)) break;
         }
 
         zpack_bool valid = memcmp(buffer, _files[i], _uncomp_sizes[i]) == 0;
