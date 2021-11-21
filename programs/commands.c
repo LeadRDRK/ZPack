@@ -398,6 +398,9 @@ static int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_e
 
         if (ZPACK_READ_STREAM_DONE(stream, entry)) break;
     }
+
+    if (stream->total_out != entry->uncomp_size)
+        printf("Warning: Uncompressed file size inconsistent with file entry record\n");
 	
 	free(path);
     ZPACK_FCLOSE(fp);
