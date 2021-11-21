@@ -464,7 +464,7 @@ int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zp
     stream->next_in  += read_size;
     stream->avail_in -= read_size;
     stream->total_in += read_size;
-    *in_size += read_size;
+    *in_size = read_size;
 
     return ZPACK_OK;
 }
@@ -502,8 +502,10 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
     if (stream->total_in < entry->comp_size)
     {
         // then read the compressed data
-        if ((ret = zpack_read_raw_file_stream(reader, entry, stream, &in_size)))
+        size_t tmp;
+        if ((ret = zpack_read_raw_file_stream(reader, entry, stream, &tmp)))
             return ret;
+        in_size += tmp;
     }
 
     // decompress it
