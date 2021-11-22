@@ -329,6 +329,24 @@ int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buf
     
     switch (entry->comp_method)
     {
+    case ZPACK_COMPRESSION_NONE:
+        // reading less than the compressed size is allowed
+        if (entry->uncomp_size > entry->comp_size)
+        {
+            if (reader->file) free(comp_data);
+            return ZPACK_ERROR_FILE_SIZE_INVALID;
+        }
+
+        if (max_size < entry->uncomp_size)
+        {
+            if (reader->file) free(comp_data);
+            return ZPACK_ERROR_BUFFER_TOO_SMALL;
+        }
+
+        memcpy(buffer, comp_data, entry->uncomp_size);
+        if (reader->file) free(comp_data);
+        break;
+
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
         ZPACK_CHECK_DCTX_ZSTD(dctx, reader);
@@ -511,6 +529,17 @@ int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_
     // decompress it
     switch (entry->comp_method)
     {
+    case ZPACK_COMPRESSION_NONE:
+    {
+        size_t write_size = ZPACK_MIN(stream->avail_out, in_size);
+        memcpy(stream->next_out, src, write_size);
+        XXH3_64bits_update(stream->xxh3_state, stream->next_out, write_size);
+
+        ZPACK_ADVANCE_STREAM_OUT(stream, write_size);
+        stream->read_back = in_size - write_size;
+        break;
+    }
+
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
     {
@@ -671,6 +700,9 @@ size_t zpack_get_dstream_in_size(zpack_compression_method method)
 {
     switch (method)
     {
+    // This will fallthrough to the largest size available
+    case ZPACK_COMPRESSION_NONE:
+
     #ifndef ZPACK_DISABLE_ZSTD
     case ZPACK_COMPRESSION_ZSTD:
         return ZSTD_DStreamInSize();
@@ -689,6 +721,8 @@ size_t zpack_get_dstream_out_size(zpack_compression_method method)
 {
     switch (method)
     {
+    case ZPACK_COMPRESSION_NONE:
+
     #ifndef ZPACK_DISABLE_ZSTD
     case ZPACK_COMPRESSION_ZSTD:
         return ZSTD_DStreamOutSize();

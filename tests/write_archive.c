@@ -11,12 +11,14 @@
 
 #define MIN(a, b) ((a < b) ? a : b)
 
-static const char* _out_names[2] = {
+static const char* _out_names[ARCHIVE_COUNT] = {
+    "out_none.zpk",
     "out_zstd.zpk",
     "out_lz4.zpk"
 };
 
-static const char* _out_names_s[2] = {
+static const char* _out_names_s[ARCHIVE_COUNT] = {
+    "out_none_streaming.zpk",
     "out_zstd_streaming.zpk",
     "out_lz4_streaming.zpk"
 };
@@ -59,7 +61,7 @@ zpack_bool write_archive_streaming(zpack_writer* writer, zpack_file* files, zpac
     {
         WRITE_ERROR(writer, ret, "zpack_init_stream");
     }
-    size_t stream_out_size = zpack_get_cstream_out_size(ZPACK_COMPRESSION_ZSTD);
+    size_t stream_out_size = zpack_get_cstream_out_size(ZPACK_COMPRESSION_NONE);
     zpack_u8* out_buf = (zpack_u8*)malloc(sizeof(zpack_u8) * stream_out_size);
     stream.next_out = out_buf;
     stream.avail_out = stream_out_size;
@@ -119,6 +121,10 @@ zpack_bool write_archives(zpack_compression_method method)
     
     case ZPACK_COMPRESSION_LZ4:
         options.level = 1;
+        break;
+    
+    default:
+        options.level = 0;
         break;
 
     }

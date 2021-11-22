@@ -126,6 +126,9 @@ static size_t zpack_get_compress_bound(zpack_compression_method method, size_t s
 {
     switch (method)
     {
+    case ZPACK_COMPRESSION_NONE:
+        return src_size;
+
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
         return ZSTD_COMPRESSBOUND(src_size);
@@ -160,6 +163,12 @@ static int zpack_compress_file(zpack_writer* writer, zpack_u8* buffer, size_t ca
 {
     switch (file->options->method)
     {
+    case ZPACK_COMPRESSION_NONE:
+        if (capacity < file->size) return ZPACK_ERROR_BUFFER_TOO_SMALL;
+        memcpy(buffer, file->buffer, file->size);
+        *comp_size = file->size;
+        break;
+
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
         // create the compression context if needed
@@ -419,6 +428,9 @@ static int zpack_check_cctx_stream(void** cctx, zpack_compression_method method,
 {
     switch (method)
     {
+    case ZPACK_COMPRESSION_NONE:
+        return ZPACK_OK;
+
     case ZPACK_COMPRESSION_ZSTD:
     #ifndef ZPACK_DISABLE_ZSTD
         ZPACK_CHECK_CCTX_ZSTD(*cctx, writer);
@@ -434,6 +446,9 @@ static int zpack_check_cctx_stream(void** cctx, zpack_compression_method method,
     #else
         return ZPACK_ERROR_NOT_AVAILABLE;
     #endif
+
+    default:
+        return ZPACK_ERROR_COMP_METHOD_INVALID;
 
     }
     if (!(*cctx)) return ZPACK_ERROR_MALLOC_FAILED;
@@ -461,6 +476,13 @@ int zpack_write_file_stream(zpack_writer* writer, zpack_compress_options* option
         size_t write_size = 0;
         switch (options->method)
         {
+        case ZPACK_COMPRESSION_NONE:
+            write_size = ZPACK_MIN(stream->avail_out, stream->avail_in);
+            memcpy(stream->next_out, stream->next_in, write_size);
+            read_pos = write_size;
+            flushed = ((stream->avail_in - write_size) == 0);
+            break;
+            
         case ZPACK_COMPRESSION_ZSTD:
         #ifndef ZPACK_DISABLE_ZSTD
         {
@@ -566,6 +588,11 @@ int zpack_write_file_stream_end(zpack_writer* writer, char* filename, zpack_comp
         size_t write_size = 0;
         switch (options->method)
         {
+        case ZPACK_COMPRESSION_NONE:
+            flushed = ZPACK_TRUE;
+            write_size = 0;
+            break;
+
         case ZPACK_COMPRESSION_ZSTD:
         #ifndef ZPACK_DISABLE_ZSTD
         {
@@ -825,6 +852,9 @@ size_t zpack_get_cstream_in_size(zpack_compression_method method)
 {
     switch (method)
     {
+    // This will fallthrough to the largest size available
+    case ZPACK_COMPRESSION_NONE:
+
     #ifndef ZPACK_DISABLE_ZSTD
     case ZPACK_COMPRESSION_ZSTD:
         return ZSTD_CStreamInSize();
@@ -843,6 +873,8 @@ size_t zpack_get_cstream_out_size(zpack_compression_method method)
 {
     switch (method)
     {
+    case ZPACK_COMPRESSION_NONE:
+
     #ifndef ZPACK_DISABLE_ZSTD
     case ZPACK_COMPRESSION_ZSTD:
         return ZSTD_CStreamOutSize();
