@@ -397,7 +397,8 @@ ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* 
 /**
  * Initializes the reader using a file.
  * @param reader The reader.
- * @param path Path to the archive.
+ * @param path UTF-8 formatted path to the archive. If you're on Windows, use
+               @ref zpack_convert_wchar_to_utf8 if needed.
  */
 ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
 
@@ -461,7 +462,8 @@ ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
 /**
  * Initializes the writer and opens a file for writing.
  * @param writer The writer.
- * @param path Path to the file.
+ * @param path UTF-8 formatted path to the archive. If you're on Windows, use
+               @ref zpack_convert_wchar_to_utf8 if needed.
  */
 ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
 
