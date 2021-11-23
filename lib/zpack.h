@@ -38,6 +38,7 @@ typedef zpack_u8 zpack_bool;
 #define ZPACK_CDR_HEADER_SIZE 20
 #define ZPACK_FILE_ENTRY_FIXED_SIZE 35 // size of fixed fields in file entry
 #define ZPACK_EOCDR_SIZE 12
+#define ZPACK_MINIMUM_ARCHIVE_SIZE (ZPACK_HEADER_SIZE + ZPACK_SIGNATURE_SIZE + ZPACK_CDR_HEADER_SIZE + ZPACK_EOCDR_SIZE)
 
 #define ZPACK_MAX_FILENAME_LENGTH 65535
 
@@ -188,8 +189,9 @@ enum zpack_result //! Return codes
     ZPACK_ERROR_WRITER_NOT_OPENED,    //!< Writer has not been opened
     ZPACK_ERROR_OPEN_FAILED,          //!< Failed to open file
     ZPACK_ERROR_SEEK_FAILED,          //!< Failed to seek file
+    ZPACK_ERROR_FILE_TOO_SMALL,       //!< File size too small to be an archive
     ZPACK_ERROR_SIGNATURE_INVALID,    //!< Invalid archive signature
-    ZPACK_ERROR_READ_FAILED,          //!< An archive section is invalid
+    ZPACK_ERROR_READ_FAILED,          //!< Failed to read data from the archive
     ZPACK_ERROR_BLOCK_SIZE_INVALID,   //!< Invalid block size
     ZPACK_ERROR_VERSION_INCOMPATIBLE, //!< Archive version is not supported
     ZPACK_ERROR_MALLOC_FAILED,        //!< Failed to allocate memory
