@@ -277,7 +277,7 @@ ZPACK_EXPORT int zpack_read_cdr_header_memory(const zpack_u8* buffer, zpack_u64*
  * @param entry_size Size of the entry in bytes.
  * @see zpack_read_cdr_memory, zpack_read_cdr
  */
-ZPACK_EXPORT int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_file_entry* entry, size_t* entry_size);
+ZPACK_EXPORT int zpack_read_file_entry_memory(const zpack_u8* buffer, size_t* size_left, zpack_file_entry* entry, size_t* entry_size);
 
 /**
  * Read all file entries from memory. Note that this function is used automatically by both

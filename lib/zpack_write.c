@@ -228,8 +228,9 @@ static zpack_file_entry* zpack_push_file_entry(zpack_writer* writer)
     if (++writer->file_count > writer->fe_capacity)
     {
         writer->fe_capacity = zpack_get_heap_size(writer->file_count);
-        writer->file_entries = (zpack_file_entry*)realloc(writer->file_entries,
-                                                          sizeof(zpack_file_entry) * writer->fe_capacity);
+        size_t size = sizeof(zpack_file_entry) * writer->fe_capacity;
+        if (size > SIZE_MAX) return NULL;
+        writer->file_entries = (zpack_file_entry*)realloc(writer->file_entries, (size_t)size);
         if (writer->file_entries == NULL)
             return NULL;
     }
@@ -354,8 +355,10 @@ int zpack_write_files_from_archive(zpack_writer* writer, zpack_reader* reader, z
         {
             if (buffer_capacity < entries[i].comp_size)
             {
+                if (entries[i].comp_size > SIZE_MAX) return ZPACK_ERROR_MALLOC_FAILED;
                 buffer_capacity = entries[i].comp_size;
                 buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * buffer_capacity);
+                if (buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
                 buffer_alloc = ZPACK_TRUE;
             }
 
@@ -716,7 +719,10 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
 {
     // calculate block size
     zpack_u64 block_size = file_count * ZPACK_FILE_ENTRY_FIXED_SIZE;
-    zpack_u16* fn_lengths = (zpack_u16*)malloc(sizeof(zpack_u16) * file_count);
+    zpack_u64 fl_size = sizeof(zpack_u16) * file_count;
+    if (fl_size > SIZE_MAX) return ZPACK_ERROR_MALLOC_FAILED;
+    zpack_u16* fn_lengths = (zpack_u16*)malloc(fl_size);
+    if (fn_lengths == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     for (zpack_u64 i = 0; i < file_count; ++i)
     {
 		size_t length = strlen(entries[i].filename);
@@ -733,6 +739,7 @@ int zpack_write_cdr_ex(zpack_writer* writer, zpack_file_entry* entries, zpack_u6
     int ret;
     if (writer->file)
     {
+        if (size > SIZE_MAX) return ZPACK_ERROR_MALLOC_FAILED;
         zpack_u8* buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * size);
         if (buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
         zpack_write_cdr_memory(buffer, entries, file_count, fn_lengths, block_size);

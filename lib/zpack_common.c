@@ -90,11 +90,15 @@ zpack_u64 zpack_get_heap_size(zpack_u64 n)
     return b;
 }
 
-int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 needed)
-{
+int zpack_check_and_grow_heap(zpack_u8** buffer, size_t* capacity, zpack_u64 needed)
+{   
     if (*capacity < needed)
     {
-        *capacity = zpack_get_heap_size(needed);
+        zpack_u64 cap = zpack_get_heap_size(needed);
+        if (cap > SIZE_MAX)
+            return ZPACK_ERROR_MALLOC_FAILED;
+        
+        *capacity = (size_t)cap;
         *buffer = (zpack_u8*)realloc(*buffer, sizeof(zpack_u8) * (*capacity));
         if (*buffer == NULL) return ZPACK_ERROR_MALLOC_FAILED;
     }
