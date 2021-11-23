@@ -218,6 +218,7 @@ int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, z
 int zpack_read_archive_memory(zpack_reader* reader)
 {
     if (!reader->buffer) return ZPACK_ERROR_ARCHIVE_NOT_LOADED;
+    if (reader->file_size < ZPACK_MINIMUM_ARCHIVE_SIZE) return ZPACK_ERROR_FILE_TOO_SMALL;
 
     // read sections
     int ret;
@@ -237,6 +238,9 @@ int zpack_read_archive_memory(zpack_reader* reader)
     p = reader->buffer + reader->eocdr_offset;
     if ((ret = zpack_read_eocdr_memory(p, &reader->cdr_offset)))
         return ret;
+    
+    if (reader->cdr_offset >= reader->file_size)
+        return ZPACK_ERROR_READ_FAILED;
 
     // cdr
     p = reader->buffer + reader->cdr_offset;
@@ -256,7 +260,8 @@ int zpack_read_archive(zpack_reader* reader)
     if (ZPACK_FSEEK(reader->file, 0, SEEK_END) != 0)
         return ZPACK_ERROR_SEEK_FAILED;
     
-    reader->file_size = ZPACK_FTELL(reader->file);
+    if (!reader->file_size) reader->file_size = ZPACK_FTELL(reader->file);
+    if (reader->file_size < ZPACK_MINIMUM_ARCHIVE_SIZE) return ZPACK_ERROR_FILE_TOO_SMALL;
 
     // read sections
     int ret;
