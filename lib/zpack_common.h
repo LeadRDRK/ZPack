@@ -4,6 +4,10 @@
 #include "zpack.h"
 #include <stdio.h>
 
+#ifndef SIZE_MAX
+#define SIZE_MAX ((size_t)-1)
+#endif
+
 #define ZPACK_READ_LE8(p)  *((const zpack_u8 *)(p))
 
 #if ZPACK_LITTLE_ENDIAN
@@ -26,7 +30,7 @@ int zpack_seek_and_write(FILE* fp, size_t offset, const zpack_u8* buffer, size_t
 #define ZPACK_MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 zpack_u64 zpack_get_heap_size(zpack_u64 n);
-int zpack_check_and_grow_heap(zpack_u8** buffer, zpack_u64* capacity, zpack_u64 needed);
+int zpack_check_and_grow_heap(zpack_u8** buffer, size_t* capacity, zpack_u64 needed);
 
 // Platform specific stuff
 
