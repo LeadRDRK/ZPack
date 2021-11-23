@@ -106,7 +106,7 @@ int zpack_read_cdr_header_memory(const zpack_u8* buffer, zpack_u64* count, zpack
     return ZPACK_OK;
 }
 
-int zpack_read_file_entry_memory(const zpack_u8* buffer, size_t* size_left, zpack_file_entry* entry, size_t* entry_size)
+int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_u64* size_left, zpack_file_entry* entry, size_t* entry_size)
 {
     // filename
     zpack_u16 filename_len = ZPACK_READ_LE16(buffer);
