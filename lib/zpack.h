@@ -53,8 +53,9 @@ typedef zpack_u8 zpack_bool;
  */
 typedef enum zpack_compression_method_e
 {
-    ZPACK_COMPRESSION_ZSTD = 0,
-    ZPACK_COMPRESSION_LZ4  = 1
+    ZPACK_COMPRESSION_NONE = 0,
+    ZPACK_COMPRESSION_ZSTD = 1,
+    ZPACK_COMPRESSION_LZ4  = 2
 
 } zpack_compression_method;
 
@@ -632,25 +633,29 @@ ZPACK_EXPORT void zpack_close_stream(zpack_stream* stream);
 
 /**
  * Gets the recommended input size for decompression.
- * @param method The compression method to get the size for.
+ * @param method The compression method to get the size for. Passing ZPACK_COMPRESSION_NONE will
+                 return the largest size available.
  */
 ZPACK_EXPORT size_t zpack_get_dstream_in_size(zpack_compression_method method);
 
 /**
  * Gets the recommended output size for decompression.
- * @param method The compression method to get the size for.
+ * @param method The compression method to get the size for. Passing ZPACK_COMPRESSION_NONE will
+                 return the largest size available.
  */
 ZPACK_EXPORT size_t zpack_get_dstream_out_size(zpack_compression_method method);
 
 /**
  * Gets the recommended input size for compression.
- * @param method The compression method to get the size for.
+ * @param method The compression method to get the size for. Passing ZPACK_COMPRESSION_NONE will
+                 return the largest size available.
  */
 ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
 
 /**
  * Gets the recommended output size for compression.
- * @param method The compression method to get the size for.
+ * @param method The compression method to get the size for. Passing ZPACK_COMPRESSION_NONE will
+                 return the largest size available.
  */
 ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
 

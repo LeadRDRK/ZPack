@@ -59,6 +59,10 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
     options->argv = argv;
 #endif
 
+    // default args
+    options->comp_options.method = ZPACK_COMPRESSION_ZSTD;
+    options->comp_options.level = 3;
+
     for (int i = 1; i < argc; ++i)
     {
         char* arg = argv[i];
@@ -73,7 +77,9 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
                 case 'm':
                 {
                     char* method_str = argv[++i];
-                    if (strncmp(method_str, "zstd", 4) == 0)
+                    if (strncmp(method_str, "none", 4) == 0)
+                        options->comp_options.method = ZPACK_COMPRESSION_NONE;
+                    else if (strncmp(method_str, "zstd", 4) == 0)
                         options->comp_options.method = ZPACK_COMPRESSION_ZSTD;
                     else if (strncmp(method_str, "lz4", 3) == 0)
                         options->comp_options.method = ZPACK_COMPRESSION_LZ4;
@@ -94,6 +100,22 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
                         {
                             printf("Invalid compression level: %s\n", level_str);
                             return ZPACK_FALSE;
+                        }
+                    }
+                    else
+                    {
+                        // default compression levels
+                        switch (options->comp_options.method)
+                        {
+                        case ZPACK_COMPRESSION_NONE:
+                        case ZPACK_COMPRESSION_LZ4:
+                            options->comp_options.level = 0;
+                            break;
+                        
+                        case ZPACK_COMPRESSION_ZSTD:
+                            options->comp_options.level = 3;
+                            break;
+                            
                         }
                     }
                 }

@@ -303,11 +303,10 @@ static int init_decompress_stream(zpack_stream* stream)
 {
     zpack_init_stream(stream);
 
-    // Using Zstd stream sizes since it's larger and can also hold LZ4 data properly
-    stream->avail_in = zpack_get_dstream_in_size(ZPACK_COMPRESSION_ZSTD);
+    stream->avail_in = zpack_get_dstream_in_size(ZPACK_COMPRESSION_NONE);
     stream->next_in = (zpack_u8*)malloc(sizeof(zpack_u8) * stream->avail_in);
 
-    stream->avail_out = zpack_get_dstream_out_size(ZPACK_COMPRESSION_ZSTD);
+    stream->avail_out = zpack_get_dstream_out_size(ZPACK_COMPRESSION_NONE);
     stream->next_out = (zpack_u8*)malloc(sizeof(zpack_u8) * stream->avail_out);
 
     if (stream->next_in == NULL || stream->next_out == NULL)
@@ -511,12 +510,20 @@ int command_list(args_options* options)
         char* method;
         switch (entry->comp_method)
         {
+        case ZPACK_COMPRESSION_NONE:
+            method = "none";
+            break;
+
         case ZPACK_COMPRESSION_ZSTD:
             method = "zstd";
             break;
 
         case ZPACK_COMPRESSION_LZ4:
             method = "lz4";
+            break;
+        
+        default:
+            method = "?";
             break;
 
         }
