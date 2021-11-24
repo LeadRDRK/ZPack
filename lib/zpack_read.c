@@ -133,23 +133,28 @@ int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_u64* size_left, z
     return ZPACK_OK;
 }
 
-int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 count, zpack_u64 block_size,
-                                   zpack_u64* total_cs, zpack_u64* total_us)
+int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 header_count,
+                                   zpack_u64 block_size, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us)
 {
-    zpack_u64 eb_size = sizeof(zpack_file_entry) * count;
+    // basic fixed size check
+    if (header_count * ZPACK_FILE_ENTRY_FIXED_SIZE > block_size)
+        return ZPACK_ERROR_BLOCK_SIZE_INVALID;
+
+    zpack_u64 eb_size = sizeof(zpack_file_entry) * header_count;
     if (eb_size > SIZE_MAX) return ZPACK_ERROR_MALLOC_FAILED;
-    *entries = (zpack_file_entry*)realloc(*entries, (size_t)eb_size);
-    if (*entries == NULL)
-        return ZPACK_ERROR_MALLOC_FAILED;
+    *entries = (zpack_file_entry*)realloc(*entries, eb_size);
+    if (*entries == NULL) return ZPACK_ERROR_MALLOC_FAILED;
+    memset(*entries, 0, eb_size);
 
     // read file entries
     int ret;
     size_t entry_size;
-    for (zpack_u64 i = 0; i < count; ++i)
+    for (zpack_u64 i = 0; i < header_count; ++i)
     {
         zpack_file_entry* entry = *entries + i;
         if ((ret = zpack_read_file_entry_memory(buffer, &block_size, entry, &entry_size)))
             return ret;
+        ++(*count);
         *total_cs += entry->comp_size;
         *total_us += entry->uncomp_size;
 
@@ -166,7 +171,8 @@ int zpack_read_cdr_memory(const zpack_u8* buffer, size_t size_left, zpack_file_e
     // read the header
     int ret;
     zpack_u64 block_size;
-    if ((ret = zpack_read_cdr_header_memory(buffer, count, &block_size)))
+    zpack_u64 file_count;
+    if ((ret = zpack_read_cdr_header_memory(buffer, &file_count, &block_size)))
         return ret;
 
     // block size check
@@ -174,10 +180,10 @@ int zpack_read_cdr_memory(const zpack_u8* buffer, size_t size_left, zpack_file_e
         return ZPACK_ERROR_BLOCK_SIZE_INVALID;
 
     // empty archive
-    if (*count == 0) return ZPACK_OK;
+    if (file_count == 0) return ZPACK_OK;
 
     // read file entries
-    return zpack_read_file_entries_memory(buffer + ZPACK_CDR_HEADER_SIZE, entries, *count, block_size, total_cs, total_us);
+    return zpack_read_file_entries_memory(buffer + ZPACK_CDR_HEADER_SIZE, entries, file_count, block_size, count, total_cs, total_us);
 }
 
 int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, zpack_u64* count, 
@@ -193,13 +199,14 @@ int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, z
 
     int ret;
     zpack_u64 block_size;
-    if ((ret = zpack_read_cdr_header_memory(buffer, count, &block_size)))
+    zpack_u64 file_count;
+    if ((ret = zpack_read_cdr_header_memory(buffer, &file_count, &block_size)))
         return ret;
     if (block_size > SIZE_MAX)
         return ZPACK_ERROR_MALLOC_FAILED;
 
     // empty archive
-    if (*count == 0) return ZPACK_OK;
+    if (file_count == 0) return ZPACK_OK;
 
     // file entries buffer
     zpack_u8* fe_buffer = (zpack_u8*)malloc(sizeof(zpack_u8) * block_size);
@@ -209,7 +216,7 @@ int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, z
     // read and parse file entries
     if (!ZPACK_FREAD(fe_buffer, block_size, 1, fp))
         return ZPACK_ERROR_READ_FAILED;
-    ret = zpack_read_file_entries_memory(fe_buffer, entries, *count, block_size, total_cs, total_us);
+    ret = zpack_read_file_entries_memory(fe_buffer, entries, file_count, block_size, count, total_cs, total_us);
 
     free(fe_buffer);
     return ret;
