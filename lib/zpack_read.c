@@ -212,7 +212,7 @@ int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry** entries, z
     ret = zpack_read_file_entries_memory(fe_buffer, entries, *count, block_size, total_cs, total_us);
 
     free(fe_buffer);
-    return ZPACK_OK;
+    return ret;
 }
 
 int zpack_read_archive_memory(zpack_reader* reader)
