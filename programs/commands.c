@@ -449,13 +449,17 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
 
         if (full_path)
         {
-			zpack_u32 size = (zpack_u32)strlen(entry->filename) + 1;
-			if (fn_buf_size < size)
-			{
-				fn_buf = (char*)realloc(fn_buf, sizeof(char) * size);
-				fn_buf_size = size;
-			}
-            utils_process_path(entry->filename, fn_buf);
+            if (!options->unsafe)
+            {
+                zpack_u32 size = (zpack_u32)strlen(entry->filename) + 1;
+                if (fn_buf_size < size)
+                {
+                    fn_buf = (char*)realloc(fn_buf, sizeof(char) * size);
+                    fn_buf_size = size;
+                }
+                utils_process_path(entry->filename, fn_buf);
+            }
+            else fn_buf = entry->filename;
             ret = extract_file(&reader, &stream, entry, fn_buf, options->output);
         }
         else ret = extract_file(&reader, &stream, entry, utils_get_filename(entry->filename, 0), options->output);
@@ -468,7 +472,7 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
     }
 
     if (ret == 0) printf("-- Done.\n");
-	free(fn_buf);
+	if (!options->unsafe) free(fn_buf);
     free(in_buf);
     free(out_buf);
     zpack_close_stream(&stream);
