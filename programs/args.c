@@ -168,6 +168,12 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
         }
     }
 
+    if (options->path_count < 1)
+    {
+        printf("Error: At least 1 file path must be specified\n");
+        return ZPACK_FALSE;
+    }
+
     return ZPACK_TRUE;
 }
 
