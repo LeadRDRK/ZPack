@@ -275,6 +275,8 @@ ZPACK_EXPORT int zpack_read_cdr_header_memory(const zpack_u8* buffer, zpack_u64*
  * Read a single file entry from memory. Note that this function is used automatically by both
  * zpack_read_cdr_memory and zpack_read_cdr.
  * @param buffer The buffer to read from.
+ * @param size_left The size remaining of the buffer containing the block. Will be checked against
+                    and subtracted by the entry size.
  * @param entry The file entry.
  * @param entry_size Size of the entry in bytes.
  * @see zpack_read_cdr_memory, zpack_read_cdr
@@ -286,13 +288,14 @@ ZPACK_EXPORT int zpack_read_file_entry_memory(const zpack_u8* buffer, zpack_u64*
  * zpack_read_cdr_memory and zpack_read_cdr.
  * @param buffer The buffer to read from.
  * @param entries The file entries.
- * @param count Number of file entries.
+ * @param header_count Expected number of file entries (from the header)
  * @param block_size Size of the entire block.
+ * @param count Number of file entries read (0 <= count <= header_count)
  * @param total_cs The total compressed size of all files in the archive.
  * @param total_us The total uncompressed size of all files in the archive.
  * @see zpack_read_cdr_memory, zpack_read_cdr
  */
-ZPACK_EXPORT int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 count, zpack_u64 block_size, zpack_u64* total_cs, zpack_u64* total_us);
+ZPACK_EXPORT int zpack_read_file_entries_memory(const zpack_u8* buffer, zpack_file_entry** entries, zpack_u64 header_count, zpack_u64 block_size, zpack_u64* count, zpack_u64* total_cs, zpack_u64* total_us);
 
 /**
  * Read the central directory record from memory.
@@ -665,6 +668,7 @@ ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
  * Gets the first file entry with the specified filename. This uses a simple linear lookup.
  * @param filename The filename to look for.
  * @param file_entries List of file entries.
+ * @param file_count File count.
  */
 ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
 

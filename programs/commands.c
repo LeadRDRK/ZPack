@@ -32,6 +32,7 @@ static int write_start(zpack_writer* writer, args_options* options, char* archiv
     if ((ret = zpack_init_writer(writer, archive_path)))
     {
         printf("Error: Failed to open \"%s\" for writing (error %d)\n", archive_path, ret);
+        zpack_close_writer(writer);
         return 1;
     }
 
@@ -225,6 +226,7 @@ static int open_archive_rw(args_options* options, zpack_reader* reader, zpack_wr
     if ((ret = zpack_init_reader(reader, archive_path)))
     {
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        zpack_close_reader(reader);
         return 1;
     }
 
@@ -369,6 +371,7 @@ static int extract_file(zpack_reader* reader, zpack_stream* stream, zpack_file_e
             else
             {
                 printf("Error: Failed to extract \"%s\" (error %d)\n", entry->filename, ret);
+                free(path);
                 ZPACK_FCLOSE(fp);
                 return 1;
             }
@@ -418,6 +421,7 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
     if ((ret = zpack_init_reader(&reader, archive_path)))
     {
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        zpack_close_reader(&reader);
         return 1;
     }
     printf("-- Found %" PRIu64 " files\n", reader.file_count);
@@ -504,6 +508,7 @@ int command_list(args_options* options)
     if ((ret = zpack_init_reader(&reader, archive_path)))
     {
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        zpack_close_reader(&reader);
         return 1;
     }
 
@@ -708,6 +713,7 @@ int command_test(args_options* options)
     if ((ret = zpack_init_reader(&reader, archive_path)))
     {
         printf("Error: Failed to open \"%s\" for reading (error %d)\n", archive_path, ret);
+        zpack_close_reader(&reader);
         return 1;
     }
     printf("-- Found %" PRIu64 " files\n", reader.file_count);
