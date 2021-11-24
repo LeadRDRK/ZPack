@@ -87,7 +87,8 @@ The filename should not be null-terminated. It is done automatically by the read
 present and it is up to the implementer to address these issues. There are no standards on how to 
 handle the paths.
 
-However, it is recommended to use `/` as the path separator.
+However, `/` must be used as the path separator, regardless of the platform the archive was created
+on.
 
 **: Supported compression methods:
 

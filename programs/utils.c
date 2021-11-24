@@ -532,8 +532,11 @@ void utils_process_path(const char* path, char* out)
     for (int i = 0; path[i]; ++i)
     {
         // reset
-        if (path[i] != '/' && got_sep)
-            got_sep = ZPACK_FALSE;
+        if (path[i] != '/')
+        {
+            if (got_sep) got_sep = ZPACK_FALSE;
+            if (!got_first_dir) got_first_dir = ZPACK_TRUE;
+        }
 
         if (path[i] != '.' && got_dot)
             got_dot = ZPACK_FALSE;
@@ -581,7 +584,6 @@ void utils_process_path(const char* path, char* out)
 
         default:
             // Others
-            if (!got_first_dir) got_first_dir = ZPACK_TRUE;
             out[pos++] = path[i];
             break;
 
