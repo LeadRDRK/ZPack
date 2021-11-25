@@ -767,3 +767,8 @@ zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* f
 
     return NULL;
 }
+
+zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_entry* entry)
+{
+    return ZPACK_READ_STREAM_DONE(stream, entry);
+}

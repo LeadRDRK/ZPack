@@ -77,6 +77,7 @@ endif()
 add_library(zpack ${ZPACK_LIBRARY_TYPE}
     zpack_common.c
     zpack_read.c
+    zpack_stream.c
     zpack_write.c
 
     zpack_common.h
