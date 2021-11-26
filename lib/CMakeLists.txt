@@ -87,3 +87,13 @@ add_library(zpack ${ZPACK_LIBRARY_TYPE}
 target_link_libraries(zpack ${xxHash_LIBRARIES} ${ZSTD_LIBRARIES} ${LZ4_LIBRARIES})
 target_include_directories(zpack PRIVATE ${xxHash_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIRS} ${LZ4_INCLUDE_DIRS})
 target_compile_definitions(zpack PRIVATE ${ZPACK_ENDIAN_DEFS} ${ZPACK_LFS_DEFS} ${ZPACK_DISABLE_DEFS})
+set_target_properties(zpack PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    PUBLIC_HEADER zpack.h
+)
+
+install(TARGETS zpack
+    LIBRARY
+    PUBLIC_HEADER
+)
