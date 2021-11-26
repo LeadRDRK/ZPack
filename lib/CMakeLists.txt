@@ -81,7 +81,6 @@ add_library(zpack ${ZPACK_LIBRARY_TYPE}
     zpack_write.c
 
     zpack_common.h
-    zpack_export.h
     zpack.h
 )
 target_link_libraries(zpack ${xxHash_LIBRARIES} ${ZSTD_LIBRARIES} ${LZ4_LIBRARIES})
