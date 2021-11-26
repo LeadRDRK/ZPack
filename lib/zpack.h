@@ -3,10 +3,6 @@
 
 /** @file */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -220,6 +216,10 @@ enum zpack_result //! Return codes
     ZPACK_ERROR_NOT_AVAILABLE         //!< Feature not available in this build of ZPack (compression method disabled, etc.)
 
 };
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Reading //
 
