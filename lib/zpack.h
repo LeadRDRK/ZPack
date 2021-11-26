@@ -10,7 +10,16 @@ extern "C" {
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "zpack_export.h"
+
+#ifdef zpack_EXPORTS // Defined by CMake
+#   if defined(_WIN32) || defined(__CYGWIN__) || defined(__ORBIS__)
+#       define ZPACK_EXPORT __declspec(dllexport)
+#   else
+#       define ZPACK_EXPORT
+#   endif
+#else
+#   define ZPACK_EXPORT
+#endif
 
 #define ZPACK_VERSION_MAJOR 2
 #define ZPACK_VERSION_MINOR 0
