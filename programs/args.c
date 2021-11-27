@@ -118,6 +118,7 @@ zpack_bool args_parse(int argc, char** argv, args_options* options)
                             
                         }
                     }
+                    break;
                 }
 
                 case 'o':
