@@ -17,6 +17,7 @@ target_link_libraries(zpack_cli PRIVATE zpack ${SHELL32_LIB})
 target_compile_definitions(zpack_cli PRIVATE ${ZPACK_LFS_DEFS} ${ZPACK_DISABLE_DEFS})
 set_target_properties(zpack_cli PROPERTIES OUTPUT_NAME zpack)
 
+include(GNUInstallDirs)
 install(TARGETS zpack_cli
-    RUNTIME
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
