@@ -466,10 +466,10 @@ ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
 /** @defgroup writer Writer
  *  The archive writer.\n
  *  Thread safety: <b>Not thread safe.</b>\n
- *  zpack_writer depends on a write_offset variable to know where to write next. Running multiple
+ *  Each blocks/files are expected to be written asynchronously, one after the other. Running multiple
  *  write operations at the same time will result in undefined behavior.\n
- *  Note that there are no restrictions on the ordering of each block while writing the archive,
- *  so make sure to follow the correct order.\n
+ *  Note that there are no guides or restrictions on the ordering of each block while writing the archive,
+ *  so make sure to follow the correct order by yourself. (or use @ref zpack_write_archive)\n
  *  (header -> data header -> files -> cdr -> eocdr)
  *  @{
  */
