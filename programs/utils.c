@@ -526,8 +526,8 @@ void utils_convert_separators_archive(char* p)
 void utils_process_path(const char* path, char* out)
 {
     zpack_bool got_first_dir = ZPACK_FALSE,
-               got_sep = ZPACK_FALSE,
-               got_dot = ZPACK_FALSE;
+               got_sep = ZPACK_FALSE;
+    int dot_pos = 0;
     int pos = 0;
     for (int i = 0; path[i]; ++i)
     {
@@ -538,8 +538,8 @@ void utils_process_path(const char* path, char* out)
             if (!got_first_dir) got_first_dir = ZPACK_TRUE;
         }
 
-        if (path[i] != '.' && got_dot)
-            got_dot = ZPACK_FALSE;
+        if (path[i] != '.' && dot_pos)
+            dot_pos = 0;
 
         switch (path[i])
         {
@@ -575,15 +575,10 @@ void utils_process_path(const char* path, char* out)
         
         case '.':
             // Prevent path traversal
-            if (!got_dot)
-            {
-                out[pos++] = '.';
-                got_dot = ZPACK_TRUE;
-            }
-            break;
+            if (++dot_pos == 2 && path[i+1] == '/')
+                break;
 
         default:
-            // Others
             out[pos++] = path[i];
             break;
 
