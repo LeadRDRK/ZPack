@@ -694,6 +694,18 @@ ZPACK_EXPORT zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_
 #define ZPACK_READ_STREAM_DONE(stream, entry) \
     ((stream)->total_in == (entry)->comp_size && (stream)->read_back == 0)
 
+/**
+ * Creates a compression context for the specified compression method.
+ * @param method The compression method.
+ */
+ZPACK_EXPORT void* zpack_create_cctx(zpack_compression_method method);
+
+/**
+ * Creates a decompression context for the specified compression method.
+ * @param method The compression method.
+ */
+ZPACK_EXPORT void* zpack_create_dctx(zpack_compression_method method);
+    
 #if defined(_WIN32) && !defined(ZPACK_DISABLE_UNICODE)
 /**
  * Converts a Windows wide char path to a UTF-8 formatted multibyte path. Needed for opening files

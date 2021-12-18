@@ -895,3 +895,18 @@ size_t zpack_get_cstream_out_size(zpack_compression_method method)
     default: return 0;
     }
 }
+
+void* zpack_create_cctx(zpack_compression_method method)
+{
+    void* cctx;
+    switch (method)
+    {
+    case ZPACK_COMPRESSION_ZSTD:
+        cctx = ZSTD_createCCtx();
+    case ZPACK_COMPRESSION_LZ4:
+        LZ4F_createCompressionContext((LZ4F_cctx**)&cctx, LZ4F_VERSION);
+    default:
+        cctx = NULL;
+    }
+    return cctx;
+}

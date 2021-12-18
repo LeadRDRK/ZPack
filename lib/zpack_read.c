@@ -772,3 +772,18 @@ zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_entry* entry)
 {
     return ZPACK_READ_STREAM_DONE(stream, entry);
 }
+
+void* zpack_create_dctx(zpack_compression_method method)
+{
+    void* dctx;
+    switch (method)
+    {
+    case ZPACK_COMPRESSION_ZSTD:
+        dctx = ZSTD_createDCtx();
+    case ZPACK_COMPRESSION_LZ4:
+        LZ4F_createDecompressionContext((LZ4F_dctx**)&dctx, LZ4F_VERSION);
+    default:
+        dctx = NULL;
+    }
+    return dctx;
+}
