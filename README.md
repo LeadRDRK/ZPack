@@ -1,7 +1,6 @@
 ZPack
 ================================
 [![build](https://github.com/LeadRDRK/ZPack/actions/workflows/cmake.yml/badge.svg)](https://github.com/LeadRDRK/ZPack/actions/workflows/cmake.yml)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/LeadRDRK/ZPack.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/LeadRDRK/ZPack/alerts/)
 [![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/LeadRDRK/ZPack.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/LeadRDRK/ZPack/context:cpp)
 
 ZPack is a simple, general-purpose archive file format with lossless data compression (similar to zip, rar, etc.). It is designed with performance in mind and uses fast compression algorithms such as [zstd](https://github.com/facebook/zstd) and [lz4](https://github.com/lz4/lz4).

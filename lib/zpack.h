@@ -343,14 +343,16 @@ ZPACK_EXPORT int zpack_read_cdr(FILE* fp, zpack_u64 cdr_offset, zpack_file_entry
 
 /**
  * Read the entire archive from the buffer assigned in the reader.
- * @see zpack_init_reader_memory, zpack_init_reader_memory_shared
  * @param reader The reader.
+ * @return A return code (see @ref zpack_result)
+ * @see zpack_init_reader_memory, zpack_init_reader_memory_shared
  */
 ZPACK_EXPORT int zpack_read_archive_memory(zpack_reader* reader);
 
 /**
  * Read the entire archive from the file stream assigned in the reader.
  * @param reader The reader.
+ * @return A return code (see @ref zpack_result)
  * @see zpack_init_reader, zpack_init_reader_cfile
  */
 ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
@@ -362,6 +364,7 @@ ZPACK_EXPORT int zpack_read_archive(zpack_reader* reader);
  * @param entry The file entry.
  * @param buffer The output buffer.
  * @param max_size Maximum number of bytes to read from.
+ * @return A return code (see @ref zpack_result)
  * @see zpack_read_file
  */
 ZPACK_EXPORT int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size);
@@ -375,6 +378,7 @@ ZPACK_EXPORT int zpack_read_raw_file(zpack_reader* reader, zpack_file_entry* ent
  * @param dctx The decompression context to be used. The context's compression library must
                match the file's compression method. You can pass NULL to use the reader's
                built-in decompression contexts.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, zpack_u8* buffer, size_t max_size, void* dctx);
 
@@ -387,6 +391,7 @@ ZPACK_EXPORT int zpack_read_file(zpack_reader* reader, zpack_file_entry* entry, 
  * @param entry The file entry.
  * @param stream The stream.
  * @param in_size Number of bytes read to the input buffer (0 <= in_size <= stream.avail_in)
+ * @return A return code (see @ref zpack_result)
  * @see zpack_read_file_stream
  */
 ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, size_t* in_size);
@@ -406,6 +411,7 @@ ZPACK_EXPORT int zpack_read_raw_file_stream(zpack_reader* reader, zpack_file_ent
  * @param dctx The decompression context to be used. The context's compression library must
                match the file's compression method. You can pass NULL to use the reader's
                built-in decompression contexts.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* entry, zpack_stream* stream, void* dctx);
 
@@ -414,6 +420,7 @@ ZPACK_EXPORT int zpack_read_file_stream(zpack_reader* reader, zpack_file_entry* 
  * @param reader The reader.
  * @param path UTF-8 formatted path to the archive. If you're on Windows, use
                @ref zpack_convert_wchar_to_utf8 if needed.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
 
@@ -423,6 +430,7 @@ ZPACK_EXPORT int zpack_init_reader(zpack_reader* reader, const char* path);
  * the file from being closed.
  * @param reader The reader.
  * @param fp The file stream.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_reader_cfile(zpack_reader* reader, FILE* fp);
 
@@ -431,6 +439,7 @@ ZPACK_EXPORT int zpack_init_reader_cfile(zpack_reader* reader, FILE* fp);
  * @param reader The reader.
  * @param buffer The archive buffer.
  * @param size The size of the buffer.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* buffer, size_t size);
 
@@ -441,6 +450,7 @@ ZPACK_EXPORT int zpack_init_reader_memory(zpack_reader* reader, const zpack_u8* 
  * @param reader The reader.
  * @param buffer The archive buffer.
  * @param size The size of the buffer.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_reader_memory_shared(zpack_reader* reader, zpack_u8* buffer, size_t size);
 
@@ -479,6 +489,7 @@ ZPACK_EXPORT void zpack_close_reader(zpack_reader* reader);
  * @param writer The writer.
  * @param path UTF-8 formatted path to the archive. If you're on Windows, use
                @ref zpack_convert_wchar_to_utf8 if needed.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
 
@@ -486,6 +497,7 @@ ZPACK_EXPORT int zpack_init_writer(zpack_writer* writer, const char* path);
  * Initializes the writer and sets the output file stream to fp.
  * @param writer The writer.
  * @param fp The file stream.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_writer_cfile(zpack_writer* writer, FILE* fp);
 
@@ -495,6 +507,7 @@ ZPACK_EXPORT int zpack_init_writer_cfile(zpack_writer* writer, FILE* fp);
  * resized automatically to fit the data during write operations.
  * @param writer The writer.
  * @param initial_size The initial heap size.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_writer_heap(zpack_writer* writer, size_t initial_size);
 
@@ -598,10 +611,14 @@ ZPACK_EXPORT int zpack_write_eocdr_ex(zpack_writer* writer, zpack_u64 cdr_offset
 
 
 /**
- * Writes the entire archive.
+ * Writes the entire archive in one go; basically a wrapper for all of the zpack_write* steps.
+ * This uses the one-shot API to compress the files in memory. If you need something more flexible
+ * or need to use the streaming API, use the other write functions yourself to incrementally
+ * write the archive.
  * @param writer The writer.
  * @param files Files to be written to the archive.
  * @param file_count File count.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_write_archive(zpack_writer* writer, zpack_file* files, zpack_u64 file_count);
 
@@ -622,6 +639,7 @@ ZPACK_EXPORT void zpack_close_writer(zpack_writer* writer);
 /**
  * Initializes the stream.
  * @param stream The stream.
+ * @return A return code (see @ref zpack_result)
  */
 ZPACK_EXPORT int zpack_init_stream(zpack_stream* stream);
 
@@ -674,10 +692,11 @@ ZPACK_EXPORT size_t zpack_get_cstream_in_size(zpack_compression_method method);
 ZPACK_EXPORT size_t zpack_get_cstream_out_size(zpack_compression_method method);
 
 /**
- * Gets the first file entry with the specified filename. This uses a simple linear lookup.
+ * Gets the first file entry with the specified filename. This does a simple linear lookup.
  * @param filename The filename to look for.
  * @param file_entries List of file entries.
  * @param file_count File count.
+ * @return The file entry. Returns NULL if the file doesn't exist.
  */
 ZPACK_EXPORT zpack_file_entry* zpack_get_file_entry(const char* filename, zpack_file_entry* file_entries, zpack_u64 file_count);
 
@@ -697,12 +716,14 @@ ZPACK_EXPORT zpack_bool zpack_read_stream_done(zpack_stream* stream, zpack_file_
 /**
  * Creates a compression context for the specified compression method.
  * @param method The compression method.
+ * @return The compression context. Returns NULL if the compression method is none or invalid.
  */
 ZPACK_EXPORT void* zpack_create_cctx(zpack_compression_method method);
 
 /**
  * Creates a decompression context for the specified compression method.
  * @param method The compression method.
+ * @return The decompression context. Returns NULL if the compression method is none or invalid.
  */
 ZPACK_EXPORT void* zpack_create_dctx(zpack_compression_method method);
     
@@ -714,6 +735,7 @@ ZPACK_EXPORT void* zpack_create_dctx(zpack_compression_method method);
  * @param buffer Output for the UTF-8 path.
  * @param len Length of the output buffer.
  * @param input The original wide char path.
+ * @return The value returned by <a href="https://docs.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte">WideCharToMultiByte</a>.
  */
 ZPACK_EXPORT int zpack_convert_wchar_to_utf8(char *buffer, size_t len, const wchar_t* input);
 #endif
