@@ -9,6 +9,7 @@ include(CMakeDependentOption)
 
 option(ZPACK_BUILD_PROGRAMS "Build the ZPack command line utility" ON)
 option(ZPACK_BUILD_TESTS "Build the ZPack unit tests" OFF)
+option(ZPACK_INSTALL "Create install targets" ON)
 
 option(ZPACK_DISABLE_ZSTD "Disable zstd support" OFF)
 option(ZPACK_DISABLE_LZ4 "Disable LZ4 support" OFF)
