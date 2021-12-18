@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(zpack
     LANGUAGES C
-    VERSION 2.0.0
+    VERSION 2.0.2
 )
 
 cmake_policy(SET CMP0077 NEW)
