@@ -903,10 +903,34 @@ void* zpack_create_cctx(zpack_compression_method method)
     {
     case ZPACK_COMPRESSION_ZSTD:
         cctx = ZSTD_createCCtx();
+        break;
+
     case ZPACK_COMPRESSION_LZ4:
         LZ4F_createCompressionContext((LZ4F_cctx**)&cctx, LZ4F_VERSION);
+        break;
+
     default:
         cctx = NULL;
+        break;
+
     }
     return cctx;
+}
+
+void zpack_free_cctx(zpack_compression_method method, void* cctx)
+{
+    switch (method)
+    {
+    case ZPACK_COMPRESSION_ZSTD:
+        ZSTD_freeCCtx(cctx);
+        break;
+
+    case ZPACK_COMPRESSION_LZ4:
+        LZ4F_freeCompressionContext(cctx);
+        break;
+    
+    default:
+        break;
+        
+    }
 }

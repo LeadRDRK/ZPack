@@ -726,6 +726,20 @@ ZPACK_EXPORT void* zpack_create_cctx(zpack_compression_method method);
  * @return The decompression context. Returns NULL if the compression method is none or invalid.
  */
 ZPACK_EXPORT void* zpack_create_dctx(zpack_compression_method method);
+
+/**
+ * Frees a compression context.
+ * @param method The context's compressor
+ * @param cctx The compression context
+ */
+ZPACK_EXPORT void zpack_free_cctx(zpack_compression_method method, void* cctx);
+
+/**
+ * Frees a decompression context.
+ * @param method The context's compressor
+ * @param dctx The decompression context
+ */
+ZPACK_EXPORT void zpack_free_dctx(zpack_compression_method method, void* dctx);
     
 #if defined(_WIN32) && !defined(ZPACK_DISABLE_UNICODE)
 /**
