@@ -122,7 +122,8 @@ static int write_files(zpack_writer* writer, args_options* options, zpack_compre
         if (fp == NULL)
         {
             printf("Error: Failed to open \"%s\" for reading\n", files[i].path);
-            WRITE_ERROR(writer, &stream, in_buf, out_buf);
+            continue;
+            //WRITE_ERROR(writer, &stream, in_buf, out_buf);
         }
 
         zpack_bool is_eof = ZPACK_FALSE;
@@ -434,7 +435,7 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
     zpack_u8* out_buf = stream.next_out;
 
     printf("-- Extracting files...\n");
-    ret = 0;
+    int error_count = 0;
 	char* fn_buf = NULL;
 	zpack_u32 fn_buf_size = 0;
     for (zpack_u64 i = 0; i < reader.file_count; ++i)
@@ -470,18 +471,19 @@ static int extract_files_i(args_options* options, zpack_bool full_path)
 
         if (ret)
         {
-            ret = 1;
-            break;
+            ++error_count;
+            ret = 0;
         }
     }
 
-    if (ret == 0) printf("-- Done.\n");
+    if (error_count) printf("-- Errors: %d\n", error_count);
+    printf("-- Done.\n");
 	if (!options->unsafe) free(fn_buf);
     free(in_buf);
     free(out_buf);
     zpack_close_stream(&stream);
     zpack_close_reader(&reader);
-    return ret;
+    return 0;
 }
 
 int command_extract(args_options* options)
